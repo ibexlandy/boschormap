@@ -1,4 +1,4 @@
-Boschor Map – v1.9 (privates Projekt)
+Boschor Map – v1.10 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,16 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.10
+- Planen ganz im Planungsfenster (keine Leiste oben mehr): Art, Linie (Skiroute / am Weg / Luftlinie), unten fest
+  Rückgängig · Speichern · Beenden. Kreuz oben oder «Beenden» schliesst ohne Speichern (Rückfrage bei Änderungen).
+- Skitour: wo keine Skiroute verläuft (z. B. Zustieg auf Strasse), folgt die Linie Strassen und Wegen.
+- Steilster Abschnitt der Linie (Grad, km, Höhe) mit «Stelle zeigen» und rot im Höhenprofil.
+  Bei Skirouten gilt die Schwierigkeit für die ganze Route (keine irreführende «Stelle» mehr).
+- Idee bearbeiten: Knopf «Route ändern» auch im Fenster «Bearbeiten».
+- Lawinenbulletin: Beschreibung, Schneedecke und Tendenz immer offen. Link Skitourenguru entfernt.
+- Markierung «Stelle zeigen» verschwindet beim Schliessen des Fensters.
 
 NEU IN v1.9
 - Planen: zuerst oben im Panel die Art wählen. Skitour und Winterhochtour rasten auf den Skirouten von swisstopo

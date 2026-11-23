@@ -124,3 +124,5 @@ hr{border:0;border-top:1px solid var(--li);margin:10px 0}
 .wpmenu{position:absolute;z-index:12;background:#fff;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.28);padding:8px;display:flex;flex-direction:column;gap:4px;min-width:190px}.wpmenu b{font-size:13px;padding:2px 6px}.wpmenu button{display:flex;align-items:center;gap:8px;border:0;background:var(--gl2);border-radius:8px;padding:9px 10px;text-align:left;font-size:14px}.wpmenu button svg{width:17px;height:17px}.wpmenu small{color:#62707d;padding:0 6px;font-size:11px}
 #modebar:has(#plX){flex-wrap:nowrap}#modebar:has(#plX) .chip{padding:6px 10px;white-space:nowrap}#modebar:has(#plX) .btn.sm{flex:none}
 @media(min-width:900px){#modebar:has(#plX){right:auto;max-width:calc(100% - 540px)}}
+.plfoot{position:sticky;bottom:0;z-index:2;display:flex;gap:6px;flex-wrap:wrap;background:var(--bg);padding:10px 0 4px;margin-top:8px;border-top:1px solid var(--li)}.plfoot .btn{flex:1;justify-content:center;min-width:0}.plfoot .btn.pri{flex:1.6}
+.bsec{margin-top:6px}.bsec b{display:block;color:#1f3a52}.bsec p{margin:2px 0 0}

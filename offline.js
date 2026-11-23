@@ -146,10 +146,10 @@ function bulletinHTML(b,h){if(!b)return `<div class="card"><h3><svg><use href="#
    <div class="row"><span class="danger d${b.level||1}">${b.level||"–"}${esc(b.sub)}</span><span class="grow"><b>Gefahrenstufe ${b.level?LVN[b.level]:"–"}</b><br><small class="muted">${esc(b.regions.slice(0,3).join(", "))}${b.regions.length>3?" …":""}</small></span></div>
    <p class="muted small">Gültig ${esc(fromTo)} · gespeichert ${fmtDT(b.t)}</p>
    ${b.ap.map(a=>`<div class="q"><div>${rose(a.asp)}</div><div class="grow"><b>${esc(PROB[a.t]||a.t)}</b>${a.elev?`<br><small>${a.elev.lowerBound?"oberhalb "+fmtN(+a.elev.lowerBound)+" m":""}${a.elev.upperBound?" unterhalb "+fmtN(+a.elev.upperBound)+" m":""}</small>`:""}
-     ${a.core?`<br><small class="muted">${esc(a.core)}</small>`:""}${a.c?`<details><summary class="small">Beschreibung</summary><p class="small" style="white-space:pre-wrap">${esc(a.c)}</p></details>`:""}</div></div>`).join("")}
+     ${a.core?`<br><small class="muted">${esc(a.core)}</small>`:""}${a.c?`<div class="bsec"><b class="small">Beschreibung</b><p class="small" style="white-space:pre-wrap">${esc(a.c)}</p></div>`:""}</div></div>`).join("")}
    ${h&&b.critLow!=null&&h>=b.critLow?`<div class="note">Der Zielort (${fmtN(h)} m) liegt im Höhenbereich der Lawinenprobleme.</div>`:""}
-   ${b.snow?`<details><summary class="small">Schneedecke</summary><p class="small" style="white-space:pre-wrap">${esc(b.snow)}</p></details>`:""}
-   ${b.tend?`<details><summary class="small">Tendenz</summary><p class="small">${esc(b.tend)}</p></details>`:""}
+   ${b.snow?`<div class="bsec"><b class="small">Schneedecke</b><p class="small" style="white-space:pre-wrap">${esc(b.snow)}</p></div>`:""}
+   ${b.tend?`<div class="bsec"><b class="small">Tendenz</b><p class="small">${esc(b.tend)}</p></div>`:""}
    <p class="muted small">Quelle: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch</p></div>`;}
 function bindBulletin(){}
 

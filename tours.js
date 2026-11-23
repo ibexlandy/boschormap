@@ -97,8 +97,9 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
    <div class="kv"><div><b>${fmtKm(t.dist)}</b><small>Distanz</small></div><div><b>${fmtN(t.up)} m</b><small>Aufstieg</small></div><div><b>${fmtN(t.down)} m</b><small>Abstieg</small></div>
     ${idea?`<div><b>≈ ${fmtDur(est)}</b><small>mit deinem Tempo</small></div>`:`<div><b>${fmtDur(t.moving)}</b><small>in Bewegung${t.total?` · gesamt ${fmtDur(t.total)}`:""}</small></div>`}
     ${t.emax!=null?`<div><b>${fmtN(t.emax)} m</b><small>höchster Punkt</small></div>`:""}${!idea&&t.moving?`<div><b>${fmtDur(est)}</b><small>Schätzung vorher</small></div>`:""}</div>
-   ${t.diffAuto?diffHTML(t.diffAuto).replace("Schwierigkeit (Vorschlag)","Schwierigkeit laut Wegen"):""}
+   ${t.diffAuto?diffHTML(t.diffAuto).replace("Schwierigkeit (Vorschlag)",/Skirouten/.test(t.diffAuto.src||"")?"Schwierigkeit laut Skirouten":"Schwierigkeit laut Wegen"):""}
    ${prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="tProf"></canvas><div class="muted small" id="tProfI">Antippen oder darüberfahren: Stelle auf der Karte</div></div>`:""}
+   ${prof.length>2?steepHTML(steepest(prof,t.prof?60:100)):""}
    ${!idea&&(t.removed||t.pauses)?`<p class="muted small">Bereinigt: ${t.pauses?t.pauses+" Pausen zusammengefasst":""}${t.removed&&t.pauses?", ":""}${t.removed?t.removed+" Ausreisser entfernt":""}.</p>`:""}
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
     ${t.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(t.note)}</p>`:""}</div>
@@ -110,12 +111,11 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
     <button class="btn" id="tGpx"><svg><use href="#i-down"/></svg>GPX</button>
     <button class="btn" id="tCond"><svg><use href="#i-${winter?"snow":"sun"}"/></svg>${winter?"Bulletin & Wetter":"Wetter"}</button>
     <button class="btn" id="tChk"><svg><use href="#i-check"/></svg>Checkliste</button>
-    ${winter?`<a class="btn" href="https://www.skitourenguru.ch/" target="_blank" rel="noopener">Skitourenguru</a>`:""}
     ${hasRaw?`<button class="btn" id="tRaw">Original-Track</button>`:""}
     <button class="btn red" id="tDel"><svg><use href="#i-trash"/></svg>Löschen</button></div>`,
    async after(P){bindDiff(P);P.addEventListener("stars",async e=>{const k=e.target.dataset.stars;t.rate=Object.assign({},t.rate||{});t.rate[k]=e.detail;await saveTour(t);});
      if(prof.length>1){const top=prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]);const b=winter?await bulletinAt(top.lat,top.lon):null;const band=b&&b.critLow!=null?[b.critLow,b.critHigh]:null;
-       drawProfile($("#tProf",P),prof,{band,info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
+       drawProfile($("#tProf",P),prof,{band,steep:steepest(prof,t.prof?60:100),info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
      bindTourPhotoCard(P,t);
      $("#tEd",P).onclick=()=>openPanel(()=>editTourPanel(t));
      const re=$("#tRe",P);if(re)re.onclick=()=>{closePanel();startPlan({edit:t.id});};
@@ -135,8 +135,9 @@ function editTourPanel(t){const sc=SCALES[t.art]||[];return {title:"Tour bearbei
    <label class="f">Status</label><select class="inp" id="eS"><option value="gemacht"${t.status==="gemacht"?" selected":""}>Gemacht</option><option value="idee"${t.status==="idee"?" selected":""}>Idee</option></select>
    <label class="f">Datum</label><input type="date" class="inp" id="eD" value="${esc(t.date||"")}">
    <label class="f">Schwierigkeit</label><select class="inp" id="eF"><option value="">–</option>${Object.values(SCALES).flat().filter((v,i,a)=>a.indexOf(v)===i).map(v=>`<option${v===t.diff?" selected":""}>${v}</option>`).join("")}</select>
-   <label class="f">Notiz</label><textarea class="inp" id="eT">${esc(t.note||"")}</textarea></div><button class="btn pri full" id="eOk"><svg><use href="#i-check"/></svg>Speichern</button>`,
+   <label class="f">Notiz</label><textarea class="inp" id="eT">${esc(t.note||"")}</textarea></div><button class="btn pri full" id="eOk"><svg><use href="#i-check"/></svg>Speichern</button>${t.status==="idee"?`<button class="btn full" id="eRe" style="margin-top:8px"><svg><use href="#i-flag"/></svg>Route ändern (Punkte auf der Karte)</button>`:""}`,
    after(P){const fill=()=>{const s=SCALES[$("#eA",P).value]||[];const cur=$("#eF",P).value;$("#eF",P).innerHTML=`<option value="">–</option>`+s.map(v=>`<option${v===cur?" selected":""}>${v}</option>`).join("");};fill();$("#eA",P).onchange=fill;
+     const er=$("#eRe",P);if(er)er.onclick=()=>{closePanel();startPlan({edit:t.id});};
      $("#eOk",P).onclick=async()=>{t.name=$("#eN",P).value.trim()||t.name;t.art=$("#eA",P).value;t.status=$("#eS",P).value;t.date=$("#eD",P).value||t.date;if($("#eF",P).value!==t.diff)t.diffWasAuto=false;t.diff=$("#eF",P).value;t.note=$("#eT",P).value.trim();
        await saveTour(t);panelBack();};}};}
 const fileSafe=s=>String(s||"tour").replace(/[^\wäöüÄÖÜéèàç\- ]+/g,"").trim().replace(/\s+/g,"_").slice(0,60)||"tour";
@@ -152,6 +153,7 @@ function drawProfile(cv,prof,o){o=o||{};if(!cv||prof.length<2)return;const dpr=M
     if(o.band){const y1=Y(Math.min(hmax,o.band[1]||hmax)),y0=Y(Math.max(hmin,o.band[0]));if(y0>T){c.fillStyle="rgba(255,152,0,.18)";c.fillRect(L,y1,W-L-R,y0-y1);c.fillStyle="#b26a00";c.fillText("kritisch laut Bulletin",L+4,y1+11);}}
     c.beginPath();c.moveTo(X(0),Y(hmin));for(const p of prof)c.lineTo(X(p.d),Y(p.h));c.lineTo(X(D),Y(hmin));c.closePath();c.fillStyle="rgba(127,179,213,.45)";c.fill();
     c.beginPath();prof.forEach((p,i)=>i?c.lineTo(X(p.d),Y(p.h)):c.moveTo(X(p.d),Y(p.h)));c.strokeStyle="#1f3a52";c.lineWidth=2;c.stroke();
+    if(o.steep){const st=o.steep;c.beginPath();let f=true;for(const p of prof){if(p.d<st.d0||p.d>st.d1)continue;f?c.moveTo(X(p.d),Y(p.h)):c.lineTo(X(p.d),Y(p.h));f=false;}c.strokeStyle="#c8102e";c.lineWidth=4;c.stroke();}
     for(const m of o.marks||[]){if(m.d==null)continue;const x=X(m.d),y=Y(m.h!=null?m.h:hmin);c.beginPath();c.arc(x,y,5,0,7);c.fillStyle="#13263a";c.fill();c.lineWidth=2;c.strokeStyle="#fff";c.stroke();}
     if(sel){c.strokeStyle="#c8102e";c.lineWidth=1.5;c.beginPath();c.moveTo(X(sel.d),T);c.lineTo(X(sel.d),H-B);c.stroke();c.beginPath();c.arc(X(sel.d),Y(sel.h),4,0,7);c.fillStyle="#c8102e";c.fill();}};
   draw();const pick=e=>{const r=cv.getBoundingClientRect();const d=Math.max(0,Math.min(D,(e.clientX-r.left-L)/(W-L-R)*D));let b=prof[0];for(const p of prof)if(Math.abs(p.d-d)<Math.abs(b.d-d))b=p;
@@ -174,16 +176,15 @@ async function startPlan(o){if(placing)endPlace();closePanel();selTour=null;
   planBar();miscDraw.push(drawPlan);await planRoute();openPanel(planPanel,{half:true});
   if(!planState.wps.length)toast("Startpunkt auf der Karte antippen",3500);}
 const defMode=art=>ARTS[art].ski?"ski":ARTS[art].prof?"weg":"luft";
+const MODE_N={ski:"Skiroute",weg:"am Weg",luft:"Luftlinie"};
+const artModes=art=>ARTS[art].ski?["ski","weg","luft"]:ARTS[art].prof?["weg","luft"]:["luft"];
 /* Art wechseln: Abschnitte passend umstellen (Skitour = Skirouten, Sommer = Wege) */
 async function setPlanArt(art){const ps=planState;if(!ps||!ARTS[art])return;ps.art=art;ls("planArt",art);const dm=defMode(art);
   if(ps.mode!=="luft"||!ps.wps.length)ps.mode=dm;for(const w of ps.wps)if(w.mode!=="luft")w.mode=dm;ps.segs=[];planBar();await planRoute();refreshPlanPanel();}
-function planBar(){const ps=planState;if(!ps)return modebar(null);const A=ARTS[ps.art];
-  modebar(`${A.ski?`<button class="chip${ps.mode==="ski"?" on":""}" id="plK">Skiroute</button>`:`<button class="chip${ps.mode==="weg"?" on":""}" id="plW"${A.prof?"":" disabled"}>am Weg</button>`}<button class="chip${ps.mode==="luft"?" on":""}" id="plL">Luftlinie</button>
-   <span class="grow"></span><button class="btn sm" id="plU" aria-label="Rückgängig"><svg><use href="#i-undo"/></svg></button><button class="btn sm" id="plX" aria-label="Planung beenden" title="Planung beenden"><svg><use href="#i-close"/></svg></button>`);
-  const pw=$("#plW");if(pw)pw.onclick=()=>{ps.mode="weg";planBar();};const pk=$("#plK");if(pk)pk.onclick=()=>{ps.mode="ski";planBar();};$("#plL").onclick=()=>{ps.mode="luft";planBar();};
-  $("#plU").onclick=planUndo;
-  $("#plX").onclick=()=>{if(ps.wps.length>1&&!confirm("Planung beenden ohne zu speichern?"))return;endPlan();};}
-function endPlan(){if(!planState)return;closeWpMenu();clearWpMarkers();for(const w of planState.wps)if(w.mk)map.removeMarker(w.mk);miscDraw=miscDraw.filter(f=>f!==drawPlan);planState=null;modebar(null);closePanel();map.render();removeProfDot();}
+/* Alles zur Planung steht im Planungsfenster; die Leiste oben wird nicht mehr gebraucht */
+function planBar(){modebar(null);refreshPlanPanel();}
+function planQuit(){const ps=planState;if(!ps)return closePanel();if(ps.undo.length&&ps.wps.length>1&&!confirm(ps.editId?"Änderungen an der Route verwerfen?":"Planung beenden ohne zu speichern?"))return;endPlan();}
+function endPlan(){if(!planState)return;closeWpMenu();clearTemp();clearWpMarkers();for(const w of planState.wps)if(w.mk)map.removeMarker(w.mk);miscDraw=miscDraw.filter(f=>f!==drawPlan);planState=null;modebar(null);closePanel();map.render();removeProfDot();}
 const snap=()=>planState.undo.push(planState.wps.map(w=>({lat:w.lat,lon:w.lon,mode:w.mode,pid:w.pid})));
 async function planClick(e){if(wpm){closeWpMenu();return;}const ps=planState;if(!ps||ps.busy>3)return;
   /* auf die Linie getippt → Zwischenpunkt einfügen */
@@ -200,17 +201,20 @@ async function planRemoveWp(w){const ps=planState;if(!ps)return;const i=ps.wps.i
 document.addEventListener("keydown",e=>{if(planState&&(e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==="z"&&!e.target.closest("input,textarea,select")){e.preventDefault();planUndo();}});
 /* Kleines Menü beim Antippen eines Wegpunkts */
 let wpm=null;function closeWpMenu(){if(wpm){map.off("move",wpm._u);wpm.remove();wpm=null;}}
-function wpMenu(w){closeWpMenu();const ps=planState;if(!ps)return;const i=ps.wps.indexOf(w);if(i<0)return;const A=ARTS[ps.art],route=A.ski?"ski":A.prof?"weg":null;
+function wpMenu(w){closeWpMenu();const ps=planState;if(!ps)return;const i=ps.wps.indexOf(w);if(i<0)return;const modes=artModes(ps.art);
   const lbl=i===0?"Start":i===ps.wps.length-1?"Ziel":"Punkt "+i;
-  const seg=i>0&&route?`<button data-wm="mode">${w.mode==="luft"?(route==="ski"?"Abschnitt davor: Skiroute":"Abschnitt davor: am Weg"):"Abschnitt davor: Luftlinie"}</button>`:"";
+  const seg=i>0&&modes.length>1?`<small>Abschnitt davor:</small>${modes.filter(m=>m!==w.mode).map(m=>`<button data-wm="mode" data-m="${m}">${MODE_N[m]}</button>`).join("")}`:"";
   wpm=document.createElement("div");wpm.className="wpmenu bm-ui";wpm.innerHTML=`<b>${lbl}</b><button data-wm="del"><svg><use href="#i-trash"/></svg>Entfernen</button>${seg}<button data-wm="x">Schliessen</button><small>Verschieben: Punkt ziehen</small>`;
   $("#map").appendChild(wpm);const u=()=>{if(!wpm)return;const p=map.project(w.lat,w.lon);const H=wpm.offsetHeight,W=wpm.offsetWidth,bot=map.h-sheetPad()-8,top=64;
     let y=p.y-H-18;if(y<top)y=p.y+18;if(y+H>bot)y=Math.max(top,bot-H);
     wpm.style.left=Math.max(8,Math.min(map.w-sheetPadR()-W-8,p.x-W/2))+"px";wpm.style.top=y+"px";};wpm._u=u;map.on("move",u);u();
   wpm.onclick=async e=>{const b=e.target.closest("[data-wm]");if(!b)return;const k=b.dataset.wm;closeWpMenu();
-    if(k==="del")await planRemoveWp(w);else if(k==="mode"){snap();w.mode=w.mode==="luft"?route:"luft";ps.segs[i-1]=null;await planRoute();refreshPlanPanel();}};}
+    if(k==="del")await planRemoveWp(w);else if(k==="mode"){snap();w.mode=b.dataset.m;ps.segs[i-1]=null;await planRoute();refreshPlanPanel();}};}
 function routeKey(a,b,prof){return `${prof}|${a.lat.toFixed(5)},${a.lon.toFixed(5)}|${b.lat.toFixed(5)},${b.lon.toFixed(5)}`;}
-async function routeSeg(a,b,mode,art){const prof=ARTS[art].prof;if(mode==="ski"&&ARTS[art].ski){const k="ski|"+routeKey(a,b,"");if(routeCache.has(k))return routeCache.get(k);const L=await skiRoute(a,b);routeCache.set(k,L);return L;}
+async function routeSeg(a,b,mode,art){const prof=ARTS[art].prof||ARTS[art].wprof;
+  /* Skiroute; wo keine verläuft (z. B. Zustieg auf Strasse oder Weg): den Wegen folgen, erst dann Luftlinie */
+  if(mode==="ski"&&ARTS[art].ski){const k="ski|"+routeKey(a,b,"");if(routeCache.has(k))return routeCache.get(k);
+    try{const L=await skiRoute(a,b);routeCache.set(k,L);return L;}catch(e){if(e.message!=="keine Skiroute"||!prof)throw e;const L=await routeSeg(a,b,"weg",art);L._via="weg";return L;}}
   if(mode==="luft"||!prof)return [[a.lat,a.lon,null],[b.lat,b.lon,null]];const k=routeKey(a,b,prof);if(routeCache.has(k))return routeCache.get(k);
   if(!navigator.onLine)throw new Error("offline");const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),30000);
   try{const r=await fetch(`https://brouter.de/brouter?lonlats=${a.lon.toFixed(6)},${a.lat.toFixed(6)}|${b.lon.toFixed(6)},${b.lat.toFixed(6)}&profile=${prof}&alternativeidx=0&format=geojson`,{signal:ctl.signal});
@@ -249,7 +253,7 @@ async function skiRoute(a,b){const [Ea,Na]=toLV95(a.lat,a.lon),[Eb,Nb]=toLV95(b.
   const tiles=skiTilesFor(Math.min(Ea,Eb)-m,Math.min(Na,Nb)-m,Math.max(Ea,Eb)+m,Math.max(Na,Nb)+m);if(tiles.length>16)throw new Error("Abschnitt zu lang");
   const feats=[];for(const [x,y] of tiles){const f=await skiTile(x,y);if(!f)throw new Error("offline");feats.push(...f);}
   const G=skiGraph(feats);const xa=Ea-2e6,ya=Na-1e6,xb=Eb-2e6,yb=Nb-1e6;const sa=skiNearest(G,xa,ya),sb=skiNearest(G,xb,yb);if(!sa||!sb)throw new Error("keine Skiroute");
-  const r=skiPath(G,sa.i,sb.i);if(!r)throw new Error("keine Skiroute");
+  const r=skiPath(G,sa.i,sb.i);if(!r)throw new Error("keine Skiroute");const direct=Math.hypot(xb-xa,yb-ya);if(r.len>direct*2.5+600)throw new Error("keine Skiroute");
   const L=[[a.lat,a.lon,null]],tags=[];let px=xa,py=ya;
   /* Gemeinsame Abschnitte mehrerer Routen: die leichteste Route zählt (z. B. Hüttenweg statt Gipfelroute) */
   const rk=v=>{const i=SKI_ORDER.indexOf(v);return i<0?99:i;};const best=(u,v)=>{const A=G.adj[u];let bf=null;for(let k=0;k<A.length;k+=3)if(A[k]===v){const f=G.F[A[k+2]];if(!bf||rk(f.v)<rk(bf.v))bf=f;}return bf;};
@@ -265,16 +269,24 @@ function routeDifficulty(segs,art){const ski=!!ARTS[art]&&!!ARTS[art].ski,bike=/
   for(const L of segs){if(!L)continue;if(!L._tags){for(let i=1;i<L.length;i++)tot+=distM(L[i-1][0],L[i-1][1],L[i][0],L[i][1]);continue;}
     for(const t of L._tags){tot+=t.d;const v=t[key];if(!v)continue;cov+=t.d;km[v]=(km[v]||0)+t.d;if(t.name)names.add(t.goal?`${t.goal} (${t.name})`:t.name);if(!top||order.indexOf(v)>order.indexOf(top.v))top={v,lat:t.lat,lon:t.lon};}}
   if(!top)return null;return {lvl:top.v,lat:top.lat,lon:top.lon,km:order.filter(o=>km[o]).map(o=>[o,Math.round(km[o])]),cov:tot?Math.round(cov/tot*100):0,scale:ski?"SAC-Skitouren":bike?"MTB":"SAC",src:ski?"swisstopo-Skirouten":"OpenStreetMap",names:[...names].slice(0,4)};}
-function diffHTML(d){if(!d)return "";return `<div class="card"><h3>Schwierigkeit (Vorschlag)</h3><div class="row"><span class="tag" style="font-size:15px">${esc(d.lvl)}</span><span class="grow muted small">schwierigster Abschnitt laut ${d.src||"OpenStreetMap"} (${d.scale}-Skala) · Angaben für ${d.cov} % der Strecke</span>
-   ${d.lat!=null?`<button class="btn sm" data-diffshow="${d.lat},${d.lon}">Stelle zeigen</button>`:""}</div>
+/* Steilster Abschnitt entlang der Linie (aus dem Höhenprofil, Fenster ca. 60 m) */
+function steepest(prof,win){win=win||60;if(!prof||prof.length<3)return null;let best=null,j=0;
+  for(let i=0;i<prof.length;i++){if(j<=i)j=i+1;while(j<prof.length&&prof[j].d-prof[i].d<win)j++;if(j>=prof.length)break;const dd=prof[j].d-prof[i].d,dh=prof[j].h-prof[i].h;if(dd<=0)continue;
+    const deg=Math.atan(Math.abs(dh)/dd)*180/Math.PI;if(!best||deg>best.deg){const m=prof[Math.round((i+j)/2)];best={deg,d0:prof[i].d,d1:prof[j].d,lat:m.lat,lon:m.lon,h:m.h,d:m.d};}}
+  return best&&best.lat!=null?best:null;}
+function steepHTML(st){if(!st)return "";return `<div class="card"><h3>Steilster Abschnitt</h3><div class="row"><span class="tag" style="font-size:15px;background:${st.deg>=35?"#c8102e":st.deg>=30?"#ef6c00":"#5c6b78"};color:#fff">${fmtN(st.deg)}°</span><span class="grow muted small">bei km ${fmtN(st.d/1000,1)} auf ${fmtN(Math.round(st.h))} m ü. M. · Steilheit entlang der Linie, das Gelände daneben kann steiler sein</span>
+   <button class="btn sm" data-diffshow="${st.lat},${st.lon}">Stelle zeigen</button></div></div>`;}
+function diffHTML(d){if(!d)return "";return `<div class="card"><h3>Schwierigkeit (Vorschlag)</h3><div class="row"><span class="tag" style="font-size:15px">${esc(d.lvl)}</span><span class="grow muted small">${/Skirouten/.test(d.src||"")?"laut":"schwierigster Abschnitt laut"} ${d.src||"OpenStreetMap"} (${d.scale}-Skala) · Angaben für ${d.cov} % der Strecke</span>
+   ${d.lat!=null&&!/Skirouten/.test(d.src||"")?`<button class="btn sm" data-diffshow="${d.lat},${d.lon}">Stelle zeigen</button>`:""}</div>${/Skirouten/.test(d.src||"")?`<div class="muted small" style="margin-top:4px">swisstopo gibt die Schwierigkeit für die ganze Route an, nicht für einzelne Stellen.</div>`:""}
    <div class="small" style="margin-top:6px">${d.km.map(([k,m])=>`${k}: ${fmtN(m/1000,1)} km`).join(" · ")}</div>${d.names&&d.names.length?`<div class="muted small" style="margin-top:4px">Skirouten: ${d.names.map(esc).join(" · ")}</div>`:""}</div>`;}
 function bindDiff(P){$$("[data-diffshow]",P).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.diffshow.split(",").map(Number);setTemp(la,lo);map.flyTo(la,lo,Math.max(map.z,15));});}
 async function planRoute(){const ps=planState;if(!ps)return;ps.busy++;planMarkers();map.render();
-  try{const n=ps.wps.length;const segs=[];let fail=0;
+  try{const n=ps.wps.length;const segs=[];let fail=0,via=0;
     for(let i=1;i<n;i++){const a=ps.wps[i-1],b=ps.wps[i];const old=ps.segs[i-1];
       if(old&&old.length>1&&Math.abs(old[0][0]-a.lat)<1e-7&&Math.abs(old[old.length-1][0]-b.lat)<1e-7&&Math.abs(old[0][1]-a.lon)<1e-7&&Math.abs(old[old.length-1][1]-b.lon)<1e-7&&old._m===b.mode&&!old._fb){segs.push(old);continue;}
-      let L;try{L=await routeSeg(a,b,b.mode,ps.art);}catch(e){fail++;L=[[a.lat,a.lon,null],[b.lat,b.lon,null]];L._fb=1;}L._m=b.mode;segs.push(L);}
-    if(planState!==ps)return;ps.segs=segs;if(fail)toast(navigator.onLine?(ARTS[ps.art].ski&&segs.some(x=>x._m==="ski"&&x._fb)?"Hier keine Skiroute in der Nähe – Abschnitt als Luftlinie":"Für einen Abschnitt kein Weg gefunden – Luftlinie"):"Offline: Abschnitte als Luftlinie",3500);
+      let L;try{L=await routeSeg(a,b,b.mode,ps.art);}catch(e){fail++;L=[[a.lat,a.lon,null],[b.lat,b.lon,null]];L._fb=1;}if(L._via)via++;L._m=b.mode;segs.push(L);}
+    if(planState!==ps)return;ps.segs=segs;if(via&&!fail)toast("Keine Skiroute – Abschnitt folgt dem Weg",2500);
+    if(fail)toast(navigator.onLine?(ARTS[ps.art].ski&&segs.some(x=>x._m==="ski"&&x._fb)?"Hier weder Skiroute noch Weg – Abschnitt als Luftlinie":"Für einen Abschnitt kein Weg gefunden – Luftlinie"):"Offline: Abschnitte als Luftlinie",3500);
     planStats();map.render();clearTimeout(ps.pt);ps.pt=setTimeout(()=>planProfile(),600);}
   finally{ps.busy--;}}
 function planLine(){const ps=planState;const out=[];ps.segs.forEach((s,i)=>{(s||[]).forEach((p,k)=>{if(i&&!k)return;out.push(p);});});return out;}
@@ -295,16 +307,21 @@ function refreshPlanPanel(){if(nav.length&&nav[nav.length-1].fn===planPanel)refr
 function planPanel(){const ps=planState;if(!ps)return {title:"Planen",html:`<div class="empty">Keine Planung offen</div>`};const t=tempoFor(ps.art);const fac=(S.settings.tempoFactor||{})[ps.art]||1;
   const est=ps.up!=null?estTime(ps.dist/1000,ps.up,ps.down,t):null;
   return {title:ps.editId?"Route ändern":"Tour planen",icon:`<svg><use href="#i-flag"/></svg>`,half:true,html:`
-   <div class="chips" id="plArts" style="margin-bottom:10px">${Object.entries(ARTS).map(([k,a])=>`<button class="chip${ps.art===k?" on":""}" data-art="${k}">${a.n}</button>`).join("")}</div>
-   ${ps.wps.length<2?`<div class="note">Zuerst oben die Art wählen, dann die Punkte der Reihe nach auf der Karte antippen. Die Linie folgt ${ARTS[ps.art].ski?"den Skirouten von swisstopo (wo keine verläuft: Luftlinie)":ARTS[ps.art].prof?"den Wegen (Umschalten auf «Luftlinie» für Abschnitte abseits der Wege)":"als Luftlinie"}.<br>Punkte ziehen = verschieben · lange drücken = entfernen · auf die Linie tippen = Zwischenpunkt.</div>`:""}
+   <div class="chips" id="plArts" style="margin-bottom:4px">${Object.entries(ARTS).map(([k,a])=>`<button class="chip${ps.art===k?" on":""}" data-art="${k}">${a.n}</button>`).join("")}</div>
+   ${artModes(ps.art).length>1?`<div class="row" style="margin-bottom:10px;gap:6px;flex-wrap:wrap"><span class="muted small">Linie:</span>${artModes(ps.art).map(m=>`<button class="chip sm${ps.mode===m?" on":""}" data-pm="${m}">${MODE_N[m]}</button>`).join("")}</div>`:""}
+   ${ps.wps.length<2?`<div class="note">Zuerst oben die Art wählen, dann die Punkte der Reihe nach auf der Karte antippen. Die Linie folgt ${ARTS[ps.art].ski?"den Skirouten von swisstopo (wo keine verläuft: Strassen und Wegen, sonst Luftlinie)":ARTS[ps.art].prof?"den Wegen (Umschalten auf «Luftlinie» für Abschnitte abseits der Wege)":"als Luftlinie"}.<br>Punkte ziehen = verschieben · lange drücken = entfernen · auf die Linie tippen = Zwischenpunkt.</div>`:""}
    <div class="kv"><div><b>${fmtKm(ps.dist||0)}</b><small>Distanz</small></div><div><b>${ps.up!=null?fmtN(ps.up)+" m":"…"}</b><small>Aufstieg</small></div><div><b>${ps.down!=null?fmtN(ps.down)+" m":"…"}</b><small>Abstieg</small></div><div><b>${est!=null?fmtDur(est):"…"}</b><small>Zeit (dein Tempo)</small></div></div>
    ${ps.prof&&ps.prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="plProf"></canvas><div class="muted small" id="plProfI">Höhen: swissALTI3D</div></div>`:ps.wps.length>1?`<p class="muted small">${navigator.onLine?"Höhenprofil wird geladen …":"Höhenprofil nur online (swisstopo)"}</p>`:""}
    ${diffHTML(routeDifficulty(ps.segs,ps.art))}
+   ${ps.prof?steepHTML(steepest(ps.prof)):""}
    <div class="card"><div class="crit"><span>Tempo ${(fac*100).toFixed(0)} %<br><small class="muted">${fmtN(t.vf,1)} km/h · ↑${fmtN(t.vu)} · ↓${fmtN(t.vd)} Hm/h</small></span><input type="range" id="plF" min="60" max="150" step="5" value="${Math.round(fac*100)}" style="flex:1;max-width:180px"></div></div>
-   <div class="btns"><button class="btn" id="plU2"${ps.undo.length?"":" disabled"}><svg><use href="#i-undo"/></svg>Rückgängig</button><button class="btn pri" id="plS"${ps.wps.length<2?" disabled":""}><svg><use href="#i-check"/></svg>Als Idee speichern</button><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
-    <button class="btn" id="plRev"${ps.wps.length<2?" disabled":""}>Umkehren</button><button class="btn" id="plZ"${ps.wps.length<2?" disabled":""}>Zurück zum Start</button></div>`,
-   after(P){if(ps.prof&&ps.prof.length>1)drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P)});bindDiff(P);
+   <div class="btns"><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
+    <button class="btn" id="plRev"${ps.wps.length<2?" disabled":""}>Umkehren</button><button class="btn" id="plZ"${ps.wps.length<2?" disabled":""}>Zurück zum Start</button></div>
+   <div class="plfoot"><button class="btn" id="plU2"${ps.undo.length?"":" disabled"} title="Rückgängig (Ctrl+Z)"><svg><use href="#i-undo"/></svg>Rückgängig</button><button class="btn pri" id="plS"${ps.wps.length<2?" disabled":""}><svg><use href="#i-check"/></svg>${ps.editId?"Speichern":"Als Idee speichern"}</button><button class="btn" id="plQ"><svg><use href="#i-close"/></svg>${ps.editId?"Verwerfen":"Beenden"}</button></div>`,onClose:planQuit,
+   after(P){if(ps.prof&&ps.prof.length>1)drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P),steep:steepest(ps.prof)});bindDiff(P);
      $$("[data-art]",P).forEach(b=>b.onclick=()=>{if(b.dataset.art!==ps.art)setPlanArt(b.dataset.art);});
+     $$("[data-pm]",P).forEach(b=>b.onclick=()=>{ps.mode=b.dataset.pm;refreshPanel();toast(`Neue Punkte: ${MODE_N[ps.mode]}`,1500);});
+     $("#plQ",P).onclick=planQuit;
      $("#plF",P).onchange=async e=>{S.settings.tempoFactor=Object.assign({},S.settings.tempoFactor||{});S.settings.tempoFactor[ps.art]=+e.target.value/100;await saveSettings();refreshPanel();};
      $("#plRev",P).onclick=async()=>{snap();ps.wps.reverse();ps.segs=[];await planRoute();refreshPanel();};
      $("#plZ",P).onclick=async()=>{snap();const a=ps.wps[0];ps.wps.push({lat:a.lat,lon:a.lon,mode:ps.mode});await planRoute();refreshPanel();};
@@ -319,7 +336,7 @@ async function savePlan(){const ps=planState;if(!ps||ps.wps.length<2)return;if(!
   const t=Object.assign(old||{id:uid(),status:"idee",rate:{},note:"",diff:""},{name:name.trim()||def,art:ps.art,src:"plan",dist:Math.round(ps.dist),up:ps.up||0,down:ps.down||0,
     emin:hs.length?Math.round(Math.min(...hs)):null,emax:hs.length?Math.round(Math.max(...hs)):null,prof:ps.prof?ps.prof.filter((p,i)=>i%2===0||i===ps.prof.length-1).map(p=>({d:Math.round(p.d),h:Math.round(p.h),lat:r5(p.lat),lon:r5(p.lon)})):null,
     plan:{art:ps.art,wps:ps.wps.map(w=>({lat:r5(w.lat),lon:r5(w.lon),mode:w.mode}))}});
-  const dA=routeDifficulty(ps.segs,ps.art);t.diffAuto=dA?{lvl:dA.lvl,lat:r5(dA.lat),lon:r5(dA.lon),km:dA.km,cov:dA.cov,scale:dA.scale}:null;if(dA&&(!t.diff||t.diffWasAuto)){t.diff=dA.lvl;t.diffWasAuto=true;}
+  const dA=routeDifficulty(ps.segs,ps.art);t.diffAuto=dA?{lvl:dA.lvl,lat:r5(dA.lat),lon:r5(dA.lon),km:dA.km,cov:dA.cov,scale:dA.scale,src:dA.src,names:dA.names}:null;if(dA&&(!t.diff||t.diffWasAuto)){t.diff=dA.lvl;t.diffWasAuto=true;}
   await saveTour(t,line);const id=t.id;endPlan();toast("Idee gespeichert");showTour(id);}
 function planName(){const ps=planState;const near=(w)=>{let b=null;for(const p of S.points){if(p.del)continue;const d=distM(w.lat,w.lon,p.lat,p.lon);if(d<300&&(!b||d<b.d))b={p,d};}return b&&b.p.name;};
   const a=near(ps.wps[0]),top=ps.prof?ps.prof.reduce((m,p)=>p.h>m.h?p:m,ps.prof[0]):null;const z=top?near(top):near(ps.wps[ps.wps.length-1]);

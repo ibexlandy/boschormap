@@ -23,7 +23,7 @@ function openPanel(fn,o){nav.push({fn,o:o||{}});renderPanel();const sh=$("#sheet
   try{if(!(history.state&&history.state.bm))history.pushState({bm:1},"");}catch(e){}}
 function replacePanel(fn,o){if(!nav.length)return openPanel(fn,o);nav[nav.length-1]={fn,o:o||{}};renderPanel();}
 function panelBack(){nav.pop();if(!nav.length)return closePanel();renderPanel();}
-function closePanel(fromPop){nav.length=0;const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
+function closePanel(fromPop){nav.length=0;clearTemp();const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
   $$("#bar button").forEach(b=>b.classList.remove("on"));
   if(selTour&&!planState){selTour=null;map.render();removeProfDot();}if(selPoint){selPoint=null;refreshMarkers();}}
 window.addEventListener("popstate",()=>{if($(".pbig")){closeGallery();try{history.pushState({bm:1},"");}catch(e){}return;}
@@ -31,7 +31,7 @@ window.addEventListener("popstate",()=>{if($(".pbig")){closeGallery();try{histor
 async function renderPanel(){const top=nav[nav.length-1];if(!top)return;const P=$("#panel");let r;try{r=await top.fn();}catch(e){console.error(e);r={title:"Fehler",html:`<div class="card">${esc(e.message)}</div>`};}
   if(nav[nav.length-1]!==top)return;const half=!!(top.o.half||r.half)&&ls("sheetFull")!=="1";$("#sheet").classList.toggle("half",half);$("#sheet").classList.toggle("canhalf",!!(top.o.half||r.half));
   P.innerHTML=`${top.o.half||r.half?`<button class="grab" aria-label="${half?"Grösser":"Kleiner"}"><i></i></button>`:""}<div class="ph">${nav.length>1?`<button class="ib" data-hdr="back" aria-label="Zurück"><svg><use href="#i-back"/></svg></button>`:""}<h2>${r.icon||""}<span>${esc(r.title||"")}</span></h2>${r.tools||""}<button class="ib" data-hdr="close" aria-label="Schliessen"><svg><use href="#i-close"/></svg></button></div><div class="pb">${r.html||""}</div>`;
-  P.querySelector('[data-hdr="close"]').onclick=()=>closePanel();const gb=P.querySelector(".grab");
+  P.querySelector('[data-hdr="close"]').onclick=()=>r.onClose?r.onClose():closePanel();const gb=P.querySelector(".grab");
   if(gb){const tog=()=>{const full=$("#sheet").classList.toggle("half")===false;ls("sheetFull",full?"1":"0");gb.setAttribute("aria-label",full?"Kleiner":"Grösser");};gb.onclick=tog;
     let y0=null;gb.addEventListener("pointerdown",e=>{y0=e.clientY;});gb.addEventListener("pointerup",e=>{if(y0==null)return;const dy=e.clientY-y0;y0=null;const isHalf=$("#sheet").classList.contains("half");
       if(dy<-25&&isHalf)tog();else if(dy>25&&!isHalf)tog();});}const bb=P.querySelector('[data-hdr="back"]');if(bb)bb.onclick=panelBack;
@@ -336,8 +336,7 @@ async function conditionsPanel(lat,lon,h,name){const b=await bulletinAt(lat,lon)
   let st=null;try{const m=await smnStations();if(m)st=pickStations(m.s,lat,lon,h);}catch(e){}const nc=await nowCached();
   const td=w&&w.days.find(d=>d.date===today());const tIc=td&&td.sy?wxIcon(td.sy,30):`<svg><use href="#i-sun"/></svg>`;
   return {title:name||"Bedingungen",icon:tIc,html:weatherHTML(w)+`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
-   <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a><a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a>
-   <a class="btn" href="https://www.skitourenguru.ch/" target="_blank" rel="noopener">Skitourenguru</a></div>`,
+   <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a><a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a></div>`,
    async after(P){$("#cUpd",P).onclick=async()=>{if(!navigator.onLine)return toast("Kein Internet");await fetchConditions();refreshPanel();};bindBulletin(P);
      if(navigator.onLine){try{if(!st){const m=await smnStations();st=m?pickStations(m.s,lat,lon,h):[];}const c=await fetchNowFor(st);const box=$("#nowBox",P);if(box&&P.contains(box))box.innerHTML=nowHTML(st,c,false);}catch(e){const box=$("#nowBox",P);if(box)box.innerHTML=nowHTML(st,nc,false);}}}};}
 
