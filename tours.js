@@ -1,4 +1,4 @@
-/* Boschor Map – Touren: GPX-Import, Liste, Detail mit Höhenprofil, Planung, Tempo, Wochenende, Checklisten */
+/* Boschor Map – Touren: GPX-Import, Liste, Detail mit Höhenprofil, Planung, Tempo, Ideen, Checklisten */
 "use strict";
 const r5=v=>Math.round(v*1e5)/1e5;
 async function saveTour(t,line,raw){t.mod=Date.now();if(!t.created)t.created=t.mod;
@@ -273,7 +273,7 @@ function tempoChart(cv,T){const dpr=Math.min(2,devicePixelRatio||1),W=cv.clientW
     if(p.length>2){c.beginPath();p.forEach((q,i)=>{const w=p.slice(Math.max(0,i-2),i+3).map(z=>z[k]).sort((a,b)=>a-b);const m=w[Math.floor(w.length/2)];i?c.lineTo(X(q.x),Y(m)):c.moveTo(X(q.x),Y(m));});c.strokeStyle=col;c.lineWidth=2;c.stroke();}};
   ser("d","#9aa4ad");ser("u","#1f3a52");}
 
-/* ---------- Wochenende: passende Ideen in der Nähe ---------- */
+/* ---------- Ideen: passende Tourideen in der Nähe (z. B. fürs Wochenende) ---------- */
 let wf=null;
 function weekendPanel(){if(!wf)wf=lsJ("wf",{arts:[],maxH:0,maxKm:0,from:"home",done:false});const o=wf.from==="me"&&S.me?S.me:wf.from==="home"&&S.settings.home?S.settings.home:map.getCenter();
   const fromName=wf.from==="me"&&S.me?"Standort":wf.from==="home"&&S.settings.home?"Zuhause":"Kartenmitte";
@@ -281,7 +281,7 @@ function weekendPanel(){if(!wf)wf=lsJ("wf",{arts:[],maxH:0,maxKm:0,from:"home",d
   L=L.map(t=>({t,km:distM(o.lat,o.lon,t.disp[0][0],t.disp[0][1])/1000,h:estFor(t)/3600})).filter(x=>(!wf.maxH||x.h<=wf.maxH)&&(!wf.maxKm||x.km<=wf.maxKm));
   L.sort((a,b)=>(((b.t.rate||{}).gesamt||0)-((a.t.rate||{}).gesamt||0))||a.km-b.km);
   const sat=nextWeekend();
-  return {title:"Wochenende",icon:`<svg><use href="#i-sun"/></svg>`,html:`
+  return {title:"Ideen",icon:`<svg><use href="#i-idea"/></svg>`,html:`
    <div class="chips">${Object.entries(ARTS).map(([k,a])=>`<button class="chip${wf.arts.includes(k)?" on":""}" data-a="${k}">${a.n}</button>`).join("")}</div>
    <div class="row" style="margin-bottom:8px"><select class="inp" id="wH" style="flex:1"><option value="0">Dauer beliebig</option>${[2,3,4,5,6,8,10].map(h=>`<option value="${h}"${wf.maxH===h?" selected":""}>bis ${h} h</option>`).join("")}</select>
     <select class="inp" id="wK" style="flex:1"><option value="0">Entfernung beliebig</option>${[20,40,60,90,120,160].map(k=>`<option value="${k}"${wf.maxKm===k?" selected":""}>bis ${k} km</option>`).join("")}</select></div>

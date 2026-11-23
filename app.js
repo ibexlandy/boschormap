@@ -293,7 +293,7 @@ function infoPanel(){return {title:"Quellen und Hinweise",html:`<div class="card
    <p><b>Wetter:</b> Quelle: MeteoSchweiz (Open Data).</p><p><b>Wegführung beim Planen:</b> BRouter (brouter.de), Daten © OpenStreetMap-Mitwirkende.</p></div>
    <div class="note">Bulletin und Wetter in der App sind eine Hilfe für unterwegs. Massgebend sind immer die aktuellen Angaben von SLF und MeteoSchweiz sowie die eigene Beurteilung vor Ort.</div>`};}
 function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",html:`
-  <div class="card"><h3>Zuhause</h3><p class="muted">Für «Wochenende»: Entfernung der Tourideen ab zu Hause.</p><div class="muted">${h?`${esc(h.name||"gesetzt")} (${h.lat.toFixed(4)}, ${h.lon.toFixed(4)})`:"noch nicht gesetzt"}</div>
+  <div class="card"><h3>Zuhause</h3><p class="muted">Für «Ideen»: Entfernung der Tourideen ab zu Hause.</p><div class="muted">${h?`${esc(h.name||"gesetzt")} (${h.lat.toFixed(4)}, ${h.lon.toFixed(4)})`:"noch nicht gesetzt"}</div>
    <div class="btns" style="margin-top:8px"><button class="btn" id="sHomeMap">Kartenmitte als Zuhause</button>${S.me?`<button class="btn" id="sHomeMe">Standort als Zuhause</button>`:""}</div></div>
   <div class="card"><h3>Speicher</h3><div id="sStor" class="muted">wird berechnet …</div><div class="btns" style="margin-top:8px"><button class="btn" id="sPersist">Dauerhaft speichern anfragen</button></div></div>
   <div class="card"><h3>App-Version</h3><p>Boschor Map v${APP_VERSION}</p><button class="btn" id="sUpd"><svg><use href="#i-sync"/></svg>Nach Update suchen</button></div>`,

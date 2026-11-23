@@ -1,4 +1,4 @@
-Boschor Map – v1.2 (privates Projekt)
+Boschor Map – v1.3 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -53,6 +53,11 @@ Inhalt des Ordners
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
 
+NEU IN v1.3
+- Reiter «Wochenende» heisst neu «Ideen» (mit Glühbirnen-Symbol).
+- Wetter: Es wird der neueste vollständige Prognoselauf von MeteoSchweiz geladen (behebt «Prognose unvollständig»).
+- Ein/Aus-Schalter wieder schmal.
+
 NEU IN v1.2
 - Alle Dateien ohne Unterordner (einfacheres Hochladen auf GitHub: alle Dateien auf einmal hineinziehen).
 
@@ -74,7 +79,7 @@ NEU IN v1.1 (erste Version)
   Zwischenpunkt durch Tippen auf die Linie, laufend Distanz, Auf-/Abstieg, Höhenprofil und Zeit. GPX-Export.
 - Persönliches Tempo pro Sportart, gelernt aus den eigenen Touren (Ebene, Aufstieg, Abstieg), mit Diagramm
   und Vergleich geschätzt/tatsächlich. Regler für das eigene Tempo.
-- Wochenende: Tourideen nach Art, Dauer und Entfernung ab Zuhause, mit Wetter und Lawinengefahr.
+- Ideen: Tourideen nach Art, Dauer und Entfernung ab Zuhause, mit Wetter und Lawinengefahr.
 - Offline-Regionen: Ausschnitt mit vier Griffen wählen, Karten, Ebenen und Zoomstufe wählen, Grösse wird
   vorher geschätzt (max. 300 km² und 20'000 Kacheln). Download massvoll mit Fortschritt (erledigt / läuft /
   kommt noch), anhalten, fortsetzen, löschen. Orts- und Gipfelnamen der Region für die Suche ohne Netz.

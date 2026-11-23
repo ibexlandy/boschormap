@@ -153,8 +153,13 @@ function bindBulletin(){}
 let wxMem=null;const STAC="https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-local-forecasting";
 async function fetchText1252(u){const r=await fetch(u,{cache:"no-store"});if(!r.ok)throw new Error("MeteoSchweiz: Fehler "+r.status);const b=await r.arrayBuffer();
   try{return new TextDecoder("utf-8",{fatal:true}).decode(b);}catch(e){return new TextDecoder("windows-1252").decode(b);}}
-async function fetchWeather(onStep){const its=await (await fetch(STAC+"/items?limit=100",{cache:"no-store"})).json();const item=(its.features||[]).slice().sort((a,b)=>a.id.localeCompare(b.id)).pop();if(!item)throw new Error("Keine Prognose gefunden");
-  const ks=Object.keys(item.assets);const run=ks.map(k=>k.split(".")[2]).filter(Boolean).sort().pop();
+async function fetchWeather(onStep){const its=await (await fetch(STAC+"/items?limit=100",{cache:"no-store"})).json();
+  /* neuester VOLLSTÄNDIGER Lauf: MeteoSchweiz lädt einen neuen Lauf schrittweise hoch – fehlt ein Wert noch, den vorherigen nehmen */
+  const need=["tre200dx","tre200dn","rka150d0"];let item=null,run=null,ks=[];
+  for(const it of (its.features||[]).slice().sort((a,b)=>b.id.localeCompare(a.id))){const k=Object.keys(it.assets||{});
+    const runs=[...new Set(k.map(x=>x.split(".")[2]).filter(Boolean))].sort().reverse();
+    const r=runs.find(r=>need.every(p=>k.some(x=>x.includes("."+r+".")&&x.includes("."+p+"."))));if(r){item=it;run=r;ks=k;break;}}
+  if(!item)throw new Error("Zurzeit keine vollständige Prognose verfügbar – später nochmals versuchen");
   let meta=await metaGet("wxmeta",null);if(!meta||Date.now()-meta.t>30*864e5){onStep&&onStep("Prognosepunkte");const tx=await fetchText1252("https://data.geo.admin.ch/ch.meteoschweiz.ogd-local-forecasting/ogd-local-forecasting_meta_point.csv");
     const rows=tx.split(/\r?\n/).slice(1).map(l=>l.split(";")).filter(c=>c.length>13);meta={t:Date.now(),p:rows.map(c=>[+c[0],c[4],+c[9],+c[12],+c[13],c[5]==="Station"?"S":c[5]==="Point of Interest"?"P":"O"])};await metaSet("wxmeta",meta);}
   const idx=new Map(meta.p.map((p,i)=>[p[0],i]));const par={tx:"tre200dx",tn:"tre200dn",rr:"rka150d0"};const dates=new Set();const raw={};
@@ -184,7 +189,7 @@ async function fetchConditions(){let ok=0;progress("Lawinenbulletin laden",0,0,"
 async function condCenterPanel(){const s=await metaGet("slf",null),w=await metaGet("wx",null);const auto=ls("autocond")!=="0";
   return {title:"Lawinenbulletin & Wetter",icon:`<svg><use href="#i-snow"/></svg>`,html:`
    <div class="card"><h3>Gespeicherter Stand</h3><div class="q"><span class="grow">Lawinenbulletin (SLF)</span><b>${s?fmtDT(s.t):"–"}</b></div><div class="q"><span class="grow">Wetterprognose (MeteoSchweiz)</span><b>${w?fmtDT(w.t):"–"}</b></div>
-    <p class="muted small">Ganze Schweiz, rund 3 MB. Danach für jeden Ort, jede Tour und «Wochenende» ohne Netz verfügbar.</p>
+    <p class="muted small">Ganze Schweiz, rund 3 MB. Danach für jeden Ort, jede Tour und «Ideen» ohne Netz verfügbar.</p>
     <button class="btn pri full" id="ccGo"><svg><use href="#i-down"/></svg>Jetzt aktualisieren</button></div>
    <label class="tg card"><span>Beim Öffnen automatisch aktualisieren<br><small class="muted">mit Netz, wenn der Stand älter als 6 Stunden ist</small></span><span class="sw2"><input type="checkbox" id="ccA"${auto?" checked":""}><i></i></span></label>
    <div class="btns"><button class="btn" id="ccHere"><svg><use href="#i-pin"/></svg>Für die Kartenmitte anzeigen</button></div>`,
