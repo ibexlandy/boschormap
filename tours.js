@@ -18,23 +18,28 @@ async function importGPX(files){const items=[];progress("GPX lesen",0,files.leng
       const t0=g.pts.find(p=>p[3]);const art=guessArt(g.type+" "+g.name+" "+files[i].name)||ls("lastArt")||"wandern";
       items.push({file:files[i],txt,g,art,name:g.name&&!/^(suunto|track|move|activity)/i.test(g.name)?g.name:"",date:t0?new Date(t0[3]).toISOString().slice(0,10):today()});}
     catch(e){items.push({file:files[i],err:e.message});}}
-  progressDone();
+  progressDone();const groups=mergeGroups(items);
   openPanel(()=>({title:`GPX importieren (${items.length})`,icon:`<svg><use href="#i-gpx"/></svg>`,html:`
     <p class="muted">Pro Tour Art und Name prüfen. Pausen und GPS-Ausreisser werden automatisch bereinigt, das Original bleibt gespeichert.</p>
+    ${groups.map((g,k)=>`<div class="card"><label class="chk"><input type="checkbox" data-mg="${k}" checked><span><b>${g.idx.length} Tracks vom ${fmtDate(g.date)} zu einer Tour zusammenfassen</b><br><small class="muted">Unterbrüche: ${g.gaps.map(fmtGap).join(", ")} · Name und Art vom ersten Track</small></span></label></div>`).join("")}
     ${items.length>1?`<div class="card row"><span class="grow">Art für alle</span><select class="inp" id="gAll" style="width:auto"><option value="">–</option>${artOpts("")}</select></div>`:""}
     ${items.map((it,i)=>it.err?`<div class="card"><b>${esc(it.file.name)}</b><div class="st-err">${esc(it.err)}</div></div>`:`<div class="card"><div class="muted small">${esc(it.file.name)} · ${fmtDate(it.date)} · ${fmtN(it.g.pts.length)} Punkte</div>
       <div class="row" style="margin-top:6px"><input class="inp grow" data-n="${i}" placeholder="Name der Tour" value="${esc(it.name)}"><select class="inp" data-a="${i}" style="width:auto">${artOpts(it.art)}</select></div></div>`).join("")}
     <button class="btn pri full" id="gGo"${items.some(x=>!x.err)?"":" disabled"}><svg><use href="#i-down"/></svg>Importieren</button>`,
     after(P){const ga=$("#gAll",P);if(ga)ga.onchange=()=>{if(ga.value)$$("[data-a]",P).forEach(s=>s.value=ga.value);};
       $("#gGo",P).onclick=async()=>{for(const s of $$("[data-a]",P))items[+s.dataset.a].art=s.value;for(const s of $$("[data-n]",P))items[+s.dataset.n].name=s.value.trim();
-        closePanel();await doImport(items.filter(x=>!x.err));};}}));}
+        for(const c of $$("[data-mg]",P))groups[+c.dataset.mg].on=c.checked;
+        /* zusammengefasste Gruppen als ein Eintrag */
+        const done=new Set(),list=[];for(let i=0;i<items.length;i++){const it=items[i];if(it.err||done.has(i))continue;const g=groups.find(g=>g.on&&g.idx.includes(i));
+          if(g){const parts=g.idx.map(j=>items[j]);g.idx.forEach(j=>done.add(j));const f=parts[0];list.push(Object.assign({},f,{parts,file:{name:parts.map(x=>x.file.name).join(" + ")}}));}else list.push(it);}
+        closePanel();await doImport(list);};}}));}
 async function doImport(items){const added=[],skipped=[];
   for(let i=0;i<items.length;i++){const it=items[i];progress("Touren bereinigen und speichern",i,items.length,it.name||it.file.name);await sleep(10);
-    const c=cleanTrack(it.g.pts,it.art);const st=c.stats;
+    const c=it.parts?combineClean(it.parts.map(x=>cleanTrack(x.g.pts,it.art))):cleanTrack(it.g.pts,it.art);const st=c.stats;if(it.parts)it.txt=mergeGpxText(it.parts.map(x=>x.txt),it.name);
     const dup=S.tours.find(t=>!t.del&&t.status==="gemacht"&&t.t0&&st.t0&&Math.abs(t.t0-st.t0)<60000&&Math.abs((t.dist||0)-st.dist)<Math.max(50,st.dist*0.02));
     if(dup){skipped.push(it.name||it.file.name);continue;}
     const t={id:uid(),status:"gemacht",src:"gpx",art:it.art,name:it.name||`${ARTS[it.art].n} ${fmtDate(it.date)}`,date:it.date,dist:st.dist,up:st.up,down:st.down,moving:st.moving,total:st.total,
-      t0:st.t0,emin:st.emin,emax:st.emax,removed:c.removed,pauses:c.pauses.length,note:"",rate:{},diff:""};
+      t0:st.t0,emin:st.emin,emax:st.emax,removed:c.removed,pauses:c.pauses.length,note:"",rate:{},diff:"",...(it.parts?{merged:it.parts.length}:{})};
     await saveTour(t,c.pts,it.txt);added.push({t,line:c.pts});}
   let tc=0;for(const a of added)tc+=await attachTripPhotos(a.t,a.line);if(tc)toast(`${tc} Unterwegs-Foto${tc>1?"s":""} auf die Route gesetzt`,4000);
   ls("lastArt",items.length?items[items.length-1].art:"");progressDone();
@@ -100,6 +105,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
    ${t.diffAuto?diffHTML(t.diffAuto).replace("Schwierigkeit (Vorschlag)",/Skirouten/.test(t.diffAuto.src||"")?"Schwierigkeit laut Skirouten":"Schwierigkeit laut Wegen"):""}
    ${prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="tProf"></canvas><div class="muted small" id="tProfI">Antippen oder darüberfahren: Stelle auf der Karte</div></div>`:""}
    ${prof.length>2?steepHTML(steepest(prof,t.prof?60:100)):""}
+   ${t.merged?`<p class="muted small">Aus ${t.merged} Tracks zusammengefasst.</p>`:""}
    ${!idea&&(t.removed||t.pauses)?`<p class="muted small">Bereinigt: ${t.pauses?t.pauses+" Pausen zusammengefasst":""}${t.removed&&t.pauses?", ":""}${t.removed?t.removed+" Ausreisser entfernt":""}.</p>`:""}
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
     ${t.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(t.note)}</p>`:""}</div>
@@ -112,6 +118,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
     <button class="btn" id="tCond"><svg><use href="#i-${winter?"snow":"sun"}"/></svg>${winter?"Bulletin & Wetter":"Wetter"}</button>
     <button class="btn" id="tChk"><svg><use href="#i-check"/></svg>Checkliste</button>
     ${hasRaw?`<button class="btn" id="tRaw">Original-Track</button>`:""}
+    ${t.status==="gemacht"&&t.src==="gpx"?`<button class="btn" id="tMrg"><svg><use href="#i-route"/></svg>Zusammenführen</button>`:""}
     <button class="btn red" id="tDel"><svg><use href="#i-trash"/></svg>Löschen</button></div>`,
    async after(P){bindDiff(P);P.addEventListener("stars",async e=>{const k=e.target.dataset.stars;t.rate=Object.assign({},t.rate||{});t.rate[k]=e.detail;await saveTour(t);});
      if(prof.length>1){const top=prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]);const b=winter?await bulletinAt(top.lat,top.lon):null;const band=b&&b.critLow!=null?[b.critLow,b.critHigh]:null;
@@ -128,6 +135,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
      $("#tChk",P).onclick=()=>openPanel(()=>checklistPanel(t.art));
      const rw=$("#tRaw",P);if(rw)rw.onclick=async()=>{const r=await getOne("raw",t.id);const g=parseGPX(r.gpx);S._selLine=g.pts.map(p=>[p[0],p[1]]);map.render();
        const st=trackStats(g.pts,g.pts.some(p=>p[3]));toast(`Original: ${fmtKm(st.dist)}, ↑${fmtN(st.up)} m, ${fmtDur(st.moving)} in Bewegung`,5000);};
+     const mg=$("#tMrg",P);if(mg)mg.onclick=()=>openPanel(()=>mergePanel(t));
      $("#tDel",P).onclick=async()=>{if(!confirm(`Tour «${t.name}» löschen?`))return;t.del=Date.now();await saveTour(t);selTour=null;closePanel();toast("Gelöscht");};
      $$("[data-p]",P).forEach(b=>b.onclick=()=>showPoint(b.dataset.p));}};}
 function editTourPanel(t){const sc=SCALES[t.art]||[];return {title:"Tour bearbeiten",html:`<div class="card">
@@ -500,3 +508,47 @@ async function attachTripPhotos(t,line){const list=await metaGet("tripCam",[]);i
     t.photos=t.photos||[];t.photos.push({id:x.id,t:x.t,lat:r5(p.lat),lon:r5(p.lon),h:p.h!=null?Math.round(p.h):null,d:Math.round(p.d)});
     const ph=await getOne("photos",x.id);if(ph){ph.pid=t.id;await put("photos",ph);}n++;}
   if(n){sortTourPhotos(t);await saveTour(t);}if(rest.length!==list.length)await metaSet("tripCam",rest);return n;}
+
+/* ---------- Mehrere Tracks zu einer Tour zusammenfassen (Unterbrüche beim Aufzeichnen) ---------- */
+const MERGE_GAP=6*3600000;
+function maxT(pts){let m=null;for(const p of pts)if(p[3]&&(m==null||p[3]>m))m=p[3];return m;}
+function minT(pts){let m=null;for(const p of pts)if(p[3]&&(m==null||p[3]<m))m=p[3];return m;}
+/* Bereinigte Teilstücke zu einer Tour: Kennzahlen summieren, Gesamtzeit vom ersten Start bis zum letzten Ende */
+function combineClean(cl){cl=cl.slice().sort((a,b)=>(a.stats.t0||0)-(b.stats.t0||0));const st={dist:0,up:0,down:0,moving:null,total:null,t0:null,emin:null,emax:null};let removed=0,pauses=0,pts=[];
+  for(const c of cl){const s=c.stats;st.dist+=s.dist||0;st.up+=s.up||0;st.down+=s.down||0;if(s.moving!=null)st.moving=(st.moving||0)+s.moving;
+    if(s.emin!=null&&(st.emin==null||s.emin<st.emin))st.emin=s.emin;if(s.emax!=null&&(st.emax==null||s.emax>st.emax))st.emax=s.emax;
+    removed+=c.removed||0;pauses+=(c.pauses||[]).length;for(const p of c.pts)pts.push(p);}
+  const a=minT(pts),b=maxT(pts);st.t0=a;st.total=a&&b?Math.round((b-a)/1000):null;
+  return {pts,stats:st,removed,pauses:{length:pauses+cl.length-1},gaps:cl.length-1};}
+function mergeGpxText(txts,name){const trk=[];for(const t of txts){const m=t.match(/<trk[\s>][\s\S]*?<\/trk>/g);if(m)trk.push(...m);}
+  if(!trk.length)return txts[0];return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Boschor Map" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${esc(name||"")}</name></metadata>\n${trk.join("\n")}\n</gpx>\n`;}
+/* Beim Import: Tracks desselben Tags mit Unterbruch unter 6 h als Gruppe vorschlagen */
+function mergeGroups(items){const v=items.map((it,i)=>({it,i})).filter(x=>!x.it.err&&minT(x.it.g.pts)).sort((a,b)=>minT(a.it.g.pts)-minT(b.it.g.pts));const groups=[];let cur=null;
+  for(const x of v){const s=minT(x.it.g.pts);if(cur&&cur.date===x.it.date&&s-cur.end<MERGE_GAP&&s-cur.end>-60000){cur.idx.push(x.i);cur.gaps.push(Math.max(0,s-cur.end));cur.end=Math.max(cur.end,maxT(x.it.g.pts));}
+    else{cur={date:x.it.date,idx:[x.i],gaps:[],end:maxT(x.it.g.pts)};groups.push(cur);}}
+  return groups.filter(g=>g.idx.length>1);}
+const fmtGap=ms=>{const m=Math.round(ms/60000);return m<60?`${m} min`:`${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")}`;};
+
+/* Bestehende Touren zusammenführen */
+async function mergeTours(ids){const ts=ids.map(id=>S.tours.find(t=>t.id===id)).filter(Boolean).sort((a,b)=>(a.t0||0)-(b.t0||0));if(ts.length<2)return null;
+  progress("Touren zusammenführen",0,ts.length);try{
+    const lines=[],raws=[];for(let i=0;i<ts.length;i++){progress("Touren zusammenführen",i,ts.length,ts[i].name);const L=await tourLine(ts[i].id);if(!L)throw new Error(`Linie von «${ts[i].name}» fehlt`);lines.push(L);
+      const r=await getOne("raw",ts[i].id);if(r)raws.push(r.gpx);}
+    const cl=ts.map((t,i)=>({pts:lines[i],removed:t.removed||0,pauses:{length:t.pauses||0},stats:{dist:t.dist,up:t.up,down:t.down,moving:t.moving,t0:t.t0,emin:t.emin,emax:t.emax}}));
+    const c=combineClean(cl);const f=ts[0];const nt=Object.assign({},f,{id:uid(),created:0,dist:c.stats.dist,up:c.stats.up,down:c.stats.down,moving:c.stats.moving,total:c.stats.total,t0:c.stats.t0,
+      emin:c.stats.emin,emax:c.stats.emax,removed:c.removed,pauses:c.pauses.length,merged:ts.length,photos:[],phDel:[],
+      note:ts.map(t=>t.note).filter(Boolean).join("\n"),rate:Object.assign({},...ts.slice().reverse().map(t=>t.rate||{})),diff:f.diff||ts.map(t=>t.diff).find(Boolean)||""});
+    delete nt.del;
+    /* Fotos auf die neue Linie setzen */
+    const cum=trackCum(c.pts);for(const t of ts)for(const x of t.photos||[]){const p=placeOnTrack(c.pts,cum,x,0);nt.photos.push(Object.assign({},x,p?{lat:r5(p.lat),lon:r5(p.lon),h:p.h!=null?Math.round(p.h):null,d:Math.round(p.d)}:{}));}
+    sortTourPhotos(nt);await saveTour(nt,c.pts,raws.length?mergeGpxText(raws,nt.name):null);
+    for(const p of S.points){let ch=false;for(const v of p.visits||[])if(ids.includes(v.tour)){v.tour=nt.id;ch=true;}if(ch){const seen=new Set();p.visits=p.visits.filter(v=>{const k=v.d+"|"+v.tour;if(seen.has(k))return false;seen.add(k);return true;});await savePoint(p);}}
+    for(const t of ts){t.photos=[];t.del=Date.now();await saveTour(t);}
+    return nt;}finally{progressDone();}}
+function mergePanel(t){const cand=S.tours.filter(x=>!x.del&&x.id!==t.id&&x.status==="gemacht"&&x.date&&t.date&&Math.abs(Date.parse(x.date)-Date.parse(t.date))<=864e5).sort((a,b)=>(a.t0||0)-(b.t0||0));
+  return {title:"Touren zusammenführen",icon:`<svg><use href="#i-route"/></svg>`,html:`<p class="muted">Für Touren, bei denen die Aufzeichnung unterbrochen wurde. Die Teile werden nach Zeit aneinandergehängt; Distanz, Höhenmeter und Zeit in Bewegung zusammengezählt, die Unterbrüche zählen als Pause.</p>
+   <div class="card"><b>${esc(t.name)}</b><div class="muted small">${fmtDate(t.date)}${t.t0?" · "+fmtClock(t.t0):""} · ${fmtKm(t.dist||0)}</div></div>
+   ${cand.length?`<div class="card">${cand.map(x=>`<label class="chk"><input type="checkbox" data-mt="${x.id}"${x.date===t.date?" checked":""}><span>${esc(x.name)}<br><small class="muted">${fmtDate(x.date)}${x.t0?" · "+fmtClock(x.t0):""} · ${fmtKm(x.dist||0)} · ${ARTS[x.art]?ARTS[x.art].n:""}</small></span></label>`).join("")}</div>
+     <button class="btn pri full" id="mGo"><svg><use href="#i-check"/></svg>Zusammenführen</button>`:`<div class="note">Keine anderen gemachten Touren vom gleichen oder vom Nachbartag.</div>`}`,
+   after(P){const g=$("#mGo",P);if(g)g.onclick=async()=>{const ids=[t.id,...$$("[data-mt]",P).filter(c=>c.checked).map(c=>c.dataset.mt)];if(ids.length<2)return toast("Mindestens eine weitere Tour wählen");
+     try{const nt=await mergeTours(ids);closePanel();if(nt){toast(`${ids.length} Touren zusammengeführt`);showTour(nt.id);}}catch(e){toast(e.message,5000);}};}};}
