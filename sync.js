@@ -68,12 +68,12 @@ async function syncDrive(quiet){if(syncing)return;if(!gdClient()){if(!quiet)open
       if(raw&&!gf){await gdUpload("bm_gpx_"+t.id+".gpx.gz",await gzip(raw.gpx));}else if(gf&&!raw&&t.status==="gemacht"){try{await put("raw",{id:t.id,gpx:await gunzip(await gdGet(gf.id))});}catch(e){}}}
     for(const t of S.tours.filter(t=>t.del)){for(const nm of ["bm_linie_"+t.id+".json.gz","bm_gpx_"+t.id+".gpx.gz"]){const f=byName.get(nm);if(f)await gdDel(f.id);}}
     /* 3. Fotos */
-    const need=new Set();for(const p of S.points)if(!p.del)for(const id of p.photos||[])need.add(id);const locPh=new Set(await getKeys("photos"));let k=0;
+    const need=new Set();for(const p of S.points)if(!p.del)for(const id of p.photos||[])need.add(id);for(const t of S.tours)if(!t.del)for(const x of t.photos||[])need.add(x.id);const locPh=new Set(await getKeys("photos"));let k=0;
     const up=[...locPh].filter(id=>need.has(id)&&!byName.has("bm_foto_"+id+".jpg")),down=[...need].filter(id=>!locPh.has(id)&&byName.has("bm_foto_"+id+".jpg"));
     for(const id of up){k++;P("Fotos hochladen",k,up.length);const ph=await getOne("photos",id);await gdUpload("bm_foto_"+id+".jpg",ph.blob,null,{pid:ph.pid||"",t:String(ph.t||0)});}
     k=0;for(const id of down){k++;P("Fotos laden",k,down.length);const f=byName.get("bm_foto_"+id+".jpg");const blob=await gdGet(f.id);let thumb=null;try{thumb=await resizeImg(blob,320,0.7);}catch(e){}
       await put("photos",{id,pid:(f.appProperties||{}).pid||"",blob,thumb,t:+(f.appProperties||{}).t||0,mod:Date.now()});}
-    for(const f of files)if(/^bm_foto_/.test(f.name)){const id=f.name.slice(8,-4);if(!need.has(id)&&S.points.some(p=>p.del&&(p.photos||[]).includes(id)))await gdDel(f.id);}
+    for(const f of files)if(/^bm_foto_/.test(f.name)){const id=f.name.slice(8,-4);if(!need.has(id)&&(S.points.some(p=>p.del&&(p.photos||[]).includes(id))||S.tours.some(t=>(t.del&&(t.photos||[]).some(x=>x.id===id))||(t.phDel||[]).includes(id))))await gdDel(f.id);}
     /* 4. zusammengeführte Daten hochladen */
     P("Daten hochladen …");const cut=Date.now()-60*864e5;
     const data={app:"boschormap",v:1,t:Date.now(),points:S.points.filter(p=>!(p.del&&p.del<cut)),tours:S.tours.filter(t=>!(t.del&&t.del<cut)).map(stripTour),settings:S.settings};
@@ -129,13 +129,14 @@ async function importBackup(file){progress("Sicherung einlesen",0,0,file.name);t
 async function exifInfo(file){const out={ll:null,date:"",time:0};try{const buf=await file.slice(0,524288).arrayBuffer();const v=new DataView(buf);if(v.byteLength<4||v.getUint16(0)!==0xFFD8)return out;let o=2;
   while(o<v.byteLength-10){const m=v.getUint16(o);if((m&0xFF00)!==0xFF00)break;const len=v.getUint16(o+2);
     if(m===0xFFE1&&v.getUint32(o+4)===0x45786966){const t=o+10,le=v.getUint16(t)===0x4949,u16=a=>v.getUint16(a,le),u32=a=>v.getUint32(a,le);
-      const str=e=>{const off=t+u32(e+8);let s="";for(let i=0;i<19;i++)s+=String.fromCharCode(v.getUint8(off+i));return s;};
+      const str=(e,n)=>{n=n||19;const c=u32(e+4);const off=c<=4?e+8:t+u32(e+8);let s="";for(let i=0;i<Math.min(n,c||n);i++){const ch=v.getUint8(off+i);if(!ch)break;s+=String.fromCharCode(ch);}return s;};let oz="";
       const ifd0=t+u32(t+4);let gps=0,sub=0,dt="";for(let i=0;i<u16(ifd0);i++){const e=ifd0+2+i*12;const tg=u16(e);if(tg===0x8825)gps=t+u32(e+8);if(tg===0x8769)sub=t+u32(e+8);if(tg===0x0132)dt=str(e);}
-      if(sub)for(let i=0;i<u16(sub);i++){const e=sub+2+i*12;if(u16(e)===0x9003){dt=str(e);break;}}
+      if(sub)for(let i=0;i<u16(sub);i++){const e=sub+2+i*12;const tg=u16(e);if(tg===0x9003)dt=str(e);if(tg===0x9011)oz=str(e,6);}
       if(gps){const g={};for(let i=0;i<u16(gps);i++){const e=gps+2+i*12,tag=u16(e),type=u16(e+2);if(tag===1||tag===3)g[tag]=String.fromCharCode(v.getUint8(e+8));
           if((tag===2||tag===4)&&type===5){const off=t+u32(e+8);const r=k=>{const d=u32(off+k*8+4);return d?u32(off+k*8)/d:0;};g[tag]=r(0)+r(1)/60+r(2)/3600;}}
         if(g[2]!=null&&g[4]!=null&&!(g[2]===0&&g[4]===0))out.ll=[g[2]*(g[1]==="S"?-1:1),g[4]*(g[3]==="W"?-1:1)];}
-      const mm=dt.match(/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/);if(mm&&mm[1]>"1990"){out.date=`${mm[1]}-${mm[2]}-${mm[3]}`;out.time=new Date(+mm[1],+mm[2]-1,+mm[3],+mm[4],+mm[5]).getTime();}break;}
+      const mm=dt.match(/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):?(\d\d)?/);if(mm&&mm[1]>"1990"){out.date=`${mm[1]}-${mm[2]}-${mm[3]}`;const z=oz.match(/^([+-])(\d\d):(\d\d)$/);
+        out.time=z?Date.UTC(+mm[1],+mm[2]-1,+mm[3],+mm[4],+mm[5],+(mm[6]||0))-(z[1]==="-"?-1:1)*(+z[2]*60+ +z[3])*60000:new Date(+mm[1],+mm[2]-1,+mm[3],+mm[4],+mm[5],+(mm[6]||0)).getTime();}break;}
     o+=2+len;}}catch(e){}return out;}
 function photoImportStart(){return {title:"Fotos importieren",icon:`<svg><use href="#i-cam"/></svg>`,html:`
   <p class="muted">Fotos vom gleichen Ort und Tag werden zusammengefasst; liegt ein eigener Ort in der Nähe (bis 150 m), werden sie dort angehängt.</p>

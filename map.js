@@ -108,10 +108,10 @@ class Map_{
     el.addEventListener("pointermove",e=>{if(!P.has(e.pointerId)||!g)return;const p=pt(e);const prev=P.get(e.pointerId);P.set(e.pointerId,p);
       if(g.mode==="pinch"&&P.size>=2){const a=[...P.values()];const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),mx=(a[0].x+a[1].x)/2,my=(a[0].y+a[1].y)/2;
         this.panBy(mx-g.mx,my-g.my);g.mx=mx;g.my=my;if(g.d>10)this.zoomAround(g.z+Math.log2(d/g.d),mx,my);return;}
-      if(g.mode==="tap"&&Math.hypot(p.x-g.x,p.y-g.y)>7){clearTimeout(lp);g.mode=g.drag?"mdrag":"pan";if(g.mode==="mdrag")this.fire("markerdragstart",{marker:g.mk});}
+      if(g.mode==="tap"&&Math.hypot(p.x-g.x,p.y-g.y)>7){clearTimeout(lp);g.mode=g.drag?"mdrag":"pan";el.classList.add("drg");if(g.mode==="mdrag")this.fire("markerdragstart",{marker:g.mk});}
       if(g.mode==="pan"){this.panBy(p.x-prev.x,p.y-prev.y);vel.push({x:p.x,y:p.y,t:performance.now()});if(vel.length>6)vel.shift();}
       else if(g.mode==="mdrag"){const ll=this.unproject(p.x,p.y);this.moveMarker(g.mk,ll.lat,ll.lon);this.fire("markerdrag",{marker:g.mk,lat:ll.lat,lon:ll.lon});}});
-    const up=e=>{if(!P.has(e.pointerId))return;P.delete(e.pointerId);clearTimeout(lp);if(!g)return;
+    const up=e=>{if(!P.has(e.pointerId))return;P.delete(e.pointerId);if(!P.size)el.classList.remove("drg");clearTimeout(lp);if(!g)return;
       if(g.mode==="pinch"){if(P.size===1){const a=[...P.values()][0];g={mode:"pan",x:a.x,y:a.y,t:Date.now(),pinched:true};vel=[];}else if(P.size===0){g=null;const zz=Math.round(this.z);if(Math.abs(zz-this.z)>0.02)this.zoomAnim(zz,this.w/2,this.h/2);else this.moved();}return;}
       if(P.size>0)return;const p=pt(e);
       if(g.mode==="tap"&&e.type==="pointerup"){const ll=this.unproject(p.x,p.y);

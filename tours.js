@@ -36,6 +36,7 @@ async function doImport(items){const added=[],skipped=[];
     const t={id:uid(),status:"gemacht",src:"gpx",art:it.art,name:it.name||`${ARTS[it.art].n} ${fmtDate(it.date)}`,date:it.date,dist:st.dist,up:st.up,down:st.down,moving:st.moving,total:st.total,
       t0:st.t0,emin:st.emin,emax:st.emax,removed:c.removed,pauses:c.pauses.length,note:"",rate:{},diff:""};
     await saveTour(t,c.pts,it.txt);added.push({t,line:c.pts});}
+  let tc=0;for(const a of added)tc+=await attachTripPhotos(a.t,a.line);if(tc)toast(`${tc} Unterwegs-Foto${tc>1?"s":""} auf die Route gesetzt`,4000);
   ls("lastArt",items.length?items[items.length-1].art:"");progressDone();
   if(skipped.length)toast(`${skipped.length} schon vorhanden – übersprungen`,4000);
   if(!added.length)return;
@@ -80,7 +81,7 @@ function toursPanel(){const all=S.tours.filter(t=>!t.del);const years=[...new Se
 
 /* ---------- Tour anzeigen ---------- */
 let profMk=null;function removeProfDot(){if(profMk){map.removeMarker(profMk);profMk=null;}}
-async function showTour(id,replace){const t=S.tours.find(x=>x.id===id);if(!t)return;selTour=id;S._selLine=null;selPoint=null;refreshMarkers();
+async function showTour(id,replace){const t=S.tours.find(x=>x.id===id);if(!t)return;selTour=id;S._selLine=null;selPoint=null;refreshMarkers();setTourPhotoMarks(t);
   const line=await tourLine(id);S._selLine=line?(line.length>3000?simplify(line,1.5):line).map(p=>[p[0],p[1]]):null;map.render();
   const b=t.bbox;const pb=sheetPad();if(b){const s=map.project(b[2],b[1]),e=map.project(b[0],b[3]);if(s.x<0||s.y<0||e.x>map.w-sheetPadR()||e.y>map.h-pb||(e.x-s.x)<map.w*0.15)map.fitBounds(b,40,pb,sheetPadR());}
   const fn=()=>tourPanel(id);if(replace)replacePanel(fn,{half:true});else openPanel(fn,{half:true});}
@@ -101,6 +102,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
    ${!idea&&(t.removed||t.pauses)?`<p class="muted small">Bereinigt: ${t.pauses?t.pauses+" Pausen zusammengefasst":""}${t.removed&&t.pauses?", ":""}${t.removed?t.removed+" Ausreisser entfernt":""}.</p>`:""}
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
     ${t.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(t.note)}</p>`:""}</div>
+   ${tourPhotoCard(t,idea)}
    ${along.length?`<div class="card"><h3>Am Weg</h3>${along.map(x=>`<button class="li" data-p="${x.p.id}">${catIc(x.p.cat)}<span class="t"><b>${esc(x.p.name)}</b><small>${x.p.hoehe?fmtN(x.p.hoehe)+" m · ":""}${CATS[x.p.cat].n}${(x.p.photos||[]).length?` · ${x.p.photos.length} Fotos`:""}</small></span></button>`).join("")}</div>`:""}
    <div class="btns">
     <button class="btn" id="tEd"><svg><use href="#i-edit"/></svg>Bearbeiten</button>
@@ -113,7 +115,8 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
     <button class="btn red" id="tDel"><svg><use href="#i-trash"/></svg>Löschen</button></div>`,
    async after(P){bindDiff(P);P.addEventListener("stars",async e=>{const k=e.target.dataset.stars;t.rate=Object.assign({},t.rate||{});t.rate[k]=e.detail;await saveTour(t);});
      if(prof.length>1){const top=prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]);const b=winter?await bulletinAt(top.lat,top.lon):null;const band=b&&b.critLow!=null?[b.critLow,b.critHigh]:null;
-       drawProfile($("#tProf",P),prof,{band,info:$("#tProfI",P)});}
+       drawProfile($("#tProf",P),prof,{band,info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
+     bindTourPhotoCard(P,t);
      $("#tEd",P).onclick=()=>openPanel(()=>editTourPanel(t));
      const re=$("#tRe",P);if(re)re.onclick=()=>{closePanel();startPlan({edit:t.id});};
      const ag=$("#tAgain",P);if(ag)ag.onclick=async()=>{const n={id:uid(),status:"idee",src:"copy",art:t.art,name:t.name,dist:t.dist,up:t.up,down:t.down,emin:t.emin,emax:t.emax,note:t.note,rate:{},diff:t.diff,
@@ -149,16 +152,18 @@ function drawProfile(cv,prof,o){o=o||{};if(!cv||prof.length<2)return;const dpr=M
     if(o.band){const y1=Y(Math.min(hmax,o.band[1]||hmax)),y0=Y(Math.max(hmin,o.band[0]));if(y0>T){c.fillStyle="rgba(255,152,0,.18)";c.fillRect(L,y1,W-L-R,y0-y1);c.fillStyle="#b26a00";c.fillText("kritisch laut Bulletin",L+4,y1+11);}}
     c.beginPath();c.moveTo(X(0),Y(hmin));for(const p of prof)c.lineTo(X(p.d),Y(p.h));c.lineTo(X(D),Y(hmin));c.closePath();c.fillStyle="rgba(127,179,213,.45)";c.fill();
     c.beginPath();prof.forEach((p,i)=>i?c.lineTo(X(p.d),Y(p.h)):c.moveTo(X(p.d),Y(p.h)));c.strokeStyle="#1f3a52";c.lineWidth=2;c.stroke();
+    for(const m of o.marks||[]){if(m.d==null)continue;const x=X(m.d),y=Y(m.h!=null?m.h:hmin);c.beginPath();c.arc(x,y,5,0,7);c.fillStyle="#13263a";c.fill();c.lineWidth=2;c.strokeStyle="#fff";c.stroke();}
     if(sel){c.strokeStyle="#c8102e";c.lineWidth=1.5;c.beginPath();c.moveTo(X(sel.d),T);c.lineTo(X(sel.d),H-B);c.stroke();c.beginPath();c.arc(X(sel.d),Y(sel.h),4,0,7);c.fillStyle="#c8102e";c.fill();}};
   draw();const pick=e=>{const r=cv.getBoundingClientRect();const d=Math.max(0,Math.min(D,(e.clientX-r.left-L)/(W-L-R)*D));let b=prof[0];for(const p of prof)if(Math.abs(p.d-d)<Math.abs(b.d-d))b=p;
     draw(b);if(o.info)o.info.textContent=`${fmtKm(b.d)} · ${fmtN(b.h)} m ü. M.`;if(b.lat!=null){if(!profMk)profMk=map.addMarker({lat:b.lat,lon:b.lon,anchor:[7,7],html:`<div class="prof-dot"></div>`,z:60});else map.moveMarker(profMk,b.lat,b.lon);}};
+  if(o.marks&&o.marks.length&&o.onMark)cv.onclick=e=>{const r=cv.getBoundingClientRect(),x=e.clientX-r.left;let bi=-1,bd=12;o.marks.forEach((m,i)=>{if(m.d==null)return;const dx=Math.abs(X(m.d)-x);if(dx<bd){bd=dx;bi=i;}});if(bi>=0)o.onMark(bi);};
   cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);pick(e);};cv.onpointermove=e=>{if(e.pointerType==="mouse"||e.buttons)pick(e);};}
 
 /* ---------- Planung wie bei SchweizMobil: antippen, Linie folgt dem Weg, Höhenprofil und Zeit laufend ---------- */
 let planState=null;const routeCache=new Map();
 function planEntry(){if(planState){openPanel(planPanel,{half:true});return;}startPlan({});}
 async function startPlan(o){if(placing)endPlace();closePanel();selTour=null;
-  const art=o.art||ls("planArt")||"wandern";planState={art,mode:ARTS[art].prof?"weg":"luft",wps:[],segs:[],editId:null,prof:null,busy:0,undo:[]};
+  const art=o.art||ls("planArt")||"wandern";planState={art,mode:defMode(art),wps:[],segs:[],editId:null,prof:null,busy:0,undo:[]};
   if(o.edit){const t=S.tours.find(x=>x.id===o.edit);if(t){planState.editId=t.id;planState.art=t.art;planState.name=t.name;
       if(t.plan&&t.plan.wps&&t.plan.wps.length){planState.wps=t.plan.wps.map(w=>Object.assign({},w));}
       else if(t.disp){const L=t.disp;planState.wps=[{lat:L[0][0],lon:L[0][1],mode:"luft"},{lat:L[L.length-1][0],lon:L[L.length-1][1],mode:"luft"}];}
@@ -168,52 +173,108 @@ async function startPlan(o){if(placing)endPlace();closePanel();selTour=null;
   $$("#bar button").forEach(x=>x.classList.toggle("on",x.dataset.go==="plan"));
   planBar();miscDraw.push(drawPlan);await planRoute();openPanel(planPanel,{half:true});
   if(!planState.wps.length)toast("Startpunkt auf der Karte antippen",3500);}
-function planBar(){const ps=planState;if(!ps)return modebar(null);
-  modebar(`<select class="inp" id="plA" style="min-height:36px;padding:4px 6px">${artOpts(ps.art)}</select>
-   <button class="chip${ps.mode==="weg"?" on":""}" id="plW"${ARTS[ps.art].prof?"":" disabled"}>am Weg</button><button class="chip${ps.mode==="luft"?" on":""}" id="plL">Luftlinie</button>
-   <span class="grow"></span><button class="btn sm" id="plU" aria-label="Rückgängig"><svg><use href="#i-undo"/></svg></button><button class="btn sm" id="plX">Beenden</button>`);
-  $("#plA").onchange=async e=>{ps.art=e.target.value;ls("planArt",ps.art);if(!ARTS[ps.art].prof)ps.mode="luft";else if(ps.mode==="luft"&&!ps.wps.length)ps.mode="weg";
-    for(const w of ps.wps)if(w.mode==="weg"||!ARTS[ps.art].prof)w.mode=ARTS[ps.art].prof?w.mode:"luft";ps.segs=[];planBar();await planRoute();refreshPlanPanel();};
-  $("#plW").onclick=()=>{ps.mode="weg";planBar();};$("#plL").onclick=()=>{ps.mode="luft";planBar();};
-  $("#plU").onclick=async()=>{const u=ps.undo.pop();if(!u)return;ps.wps=u;ps.segs=[];await planRoute();refreshPlanPanel();};
+const defMode=art=>ARTS[art].ski?"ski":ARTS[art].prof?"weg":"luft";
+/* Art wechseln: Abschnitte passend umstellen (Skitour = Skirouten, Sommer = Wege) */
+async function setPlanArt(art){const ps=planState;if(!ps||!ARTS[art])return;ps.art=art;ls("planArt",art);const dm=defMode(art);
+  if(ps.mode!=="luft"||!ps.wps.length)ps.mode=dm;for(const w of ps.wps)if(w.mode!=="luft")w.mode=dm;ps.segs=[];planBar();await planRoute();refreshPlanPanel();}
+function planBar(){const ps=planState;if(!ps)return modebar(null);const A=ARTS[ps.art];
+  modebar(`${A.ski?`<button class="chip${ps.mode==="ski"?" on":""}" id="plK">Skiroute</button>`:`<button class="chip${ps.mode==="weg"?" on":""}" id="plW"${A.prof?"":" disabled"}>am Weg</button>`}<button class="chip${ps.mode==="luft"?" on":""}" id="plL">Luftlinie</button>
+   <span class="grow"></span><button class="btn sm" id="plU" aria-label="Rückgängig"><svg><use href="#i-undo"/></svg></button><button class="btn sm" id="plX" aria-label="Planung beenden" title="Planung beenden"><svg><use href="#i-close"/></svg></button>`);
+  const pw=$("#plW");if(pw)pw.onclick=()=>{ps.mode="weg";planBar();};const pk=$("#plK");if(pk)pk.onclick=()=>{ps.mode="ski";planBar();};$("#plL").onclick=()=>{ps.mode="luft";planBar();};
+  $("#plU").onclick=planUndo;
   $("#plX").onclick=()=>{if(ps.wps.length>1&&!confirm("Planung beenden ohne zu speichern?"))return;endPlan();};}
-function endPlan(){if(!planState)return;for(const w of planState.wps)if(w.mk)map.removeMarker(w.mk);miscDraw=miscDraw.filter(f=>f!==drawPlan);planState=null;modebar(null);closePanel();map.render();removeProfDot();}
+function endPlan(){if(!planState)return;closeWpMenu();clearWpMarkers();for(const w of planState.wps)if(w.mk)map.removeMarker(w.mk);miscDraw=miscDraw.filter(f=>f!==drawPlan);planState=null;modebar(null);closePanel();map.render();removeProfDot();}
 const snap=()=>planState.undo.push(planState.wps.map(w=>({lat:w.lat,lon:w.lon,mode:w.mode,pid:w.pid})));
-async function planClick(e){const ps=planState;if(!ps||ps.busy>3)return;
+async function planClick(e){if(wpm){closeWpMenu();return;}const ps=planState;if(!ps||ps.busy>3)return;
   /* auf die Linie getippt → Zwischenpunkt einfügen */
   if(!e.pid&&ps.wps.length>1&&e.x!=null){let best=null;for(let i=0;i<ps.segs.length;i++){const L=ps.segs[i]||[];for(let k=1;k<L.length;k++){const a=map.project(L[k-1][0],L[k-1][1]),b=map.project(L[k][0],L[k][1]);const d=segPx(e.x,e.y,a,b);if(d<12&&(!best||d<best.d))best={i,d};}}
     if(best){snap();ps.wps.splice(best.i+1,0,{lat:e.lat,lon:e.lon,mode:ps.wps[best.i+1].mode});ps.segs.splice(best.i,1,null,null);await planRoute();refreshPlanPanel();return;}}
   snap();ps.wps.push({lat:e.lat,lon:e.lon,mode:ps.mode,pid:e.pid});await planRoute();refreshPlanPanel();}
-function planMarkers(){const ps=planState;for(const w of ps.wps)if(w.mk){map.removeMarker(w.mk);w.mk=null;}
-  ps.wps.forEach((w,i)=>{const last=i===ps.wps.length-1&&i>0;const m=map.addMarker({lat:w.lat,lon:w.lon,anchor:[11,11],drag:true,z:70,html:`<div class="wp${i===0?" s":last?" e":""}">${i===0?"S":last?"Z":i}</div>`});m.wp=w;w.mk=m;
-    m.onClick=()=>toast("Punkt verschieben: ziehen · entfernen: lange drücken",3000);});}
+/* Alle Wegpunkt-Marker zentral führen: so bleiben nach Rückgängig/Abbruch keine losen Punkte auf der Karte */
+const wpMks=new Set();function clearWpMarkers(){for(const m of wpMks)map.removeMarker(m);wpMks.clear();if(planState)for(const w of planState.wps)w.mk=null;}
+function planMarkers(){const ps=planState;clearWpMarkers();
+  ps.wps.forEach((w,i)=>{const last=i===ps.wps.length-1&&i>0;const m=map.addMarker({lat:w.lat,lon:w.lon,anchor:[11,11],drag:true,z:70,html:`<div class="wp${i===0?" s":last?" e":""}">${i===0?"S":last?"Z":i}</div>`});m.wp=w;w.mk=m;wpMks.add(m);
+    m.onClick=()=>wpMenu(w);});}
+async function planUndo(){const ps=planState;if(!ps)return;closeWpMenu();const u=ps.undo.pop();if(!u)return toast("Nichts mehr rückgängig zu machen");for(const w of ps.wps)if(w.mk){map.removeMarker(w.mk);w.mk=null;}ps.wps=u;ps.segs=[];await planRoute();refreshPlanPanel();}
+async function planRemoveWp(w){const ps=planState;if(!ps)return;const i=ps.wps.indexOf(w);if(i<0)return;snap();if(w.mk)map.removeMarker(w.mk);ps.wps.splice(i,1);ps.segs=[];await planRoute();refreshPlanPanel();}
+document.addEventListener("keydown",e=>{if(planState&&(e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==="z"&&!e.target.closest("input,textarea,select")){e.preventDefault();planUndo();}});
+/* Kleines Menü beim Antippen eines Wegpunkts */
+let wpm=null;function closeWpMenu(){if(wpm){map.off("move",wpm._u);wpm.remove();wpm=null;}}
+function wpMenu(w){closeWpMenu();const ps=planState;if(!ps)return;const i=ps.wps.indexOf(w);if(i<0)return;const A=ARTS[ps.art],route=A.ski?"ski":A.prof?"weg":null;
+  const lbl=i===0?"Start":i===ps.wps.length-1?"Ziel":"Punkt "+i;
+  const seg=i>0&&route?`<button data-wm="mode">${w.mode==="luft"?(route==="ski"?"Abschnitt davor: Skiroute":"Abschnitt davor: am Weg"):"Abschnitt davor: Luftlinie"}</button>`:"";
+  wpm=document.createElement("div");wpm.className="wpmenu bm-ui";wpm.innerHTML=`<b>${lbl}</b><button data-wm="del"><svg><use href="#i-trash"/></svg>Entfernen</button>${seg}<button data-wm="x">Schliessen</button><small>Verschieben: Punkt ziehen</small>`;
+  $("#map").appendChild(wpm);const u=()=>{if(!wpm)return;const p=map.project(w.lat,w.lon);const H=wpm.offsetHeight,W=wpm.offsetWidth,bot=map.h-sheetPad()-8,top=64;
+    let y=p.y-H-18;if(y<top)y=p.y+18;if(y+H>bot)y=Math.max(top,bot-H);
+    wpm.style.left=Math.max(8,Math.min(map.w-sheetPadR()-W-8,p.x-W/2))+"px";wpm.style.top=y+"px";};wpm._u=u;map.on("move",u);u();
+  wpm.onclick=async e=>{const b=e.target.closest("[data-wm]");if(!b)return;const k=b.dataset.wm;closeWpMenu();
+    if(k==="del")await planRemoveWp(w);else if(k==="mode"){snap();w.mode=w.mode==="luft"?route:"luft";ps.segs[i-1]=null;await planRoute();refreshPlanPanel();}};}
 function routeKey(a,b,prof){return `${prof}|${a.lat.toFixed(5)},${a.lon.toFixed(5)}|${b.lat.toFixed(5)},${b.lon.toFixed(5)}`;}
-async function routeSeg(a,b,mode,art){const prof=ARTS[art].prof;if(mode==="luft"||!prof)return [[a.lat,a.lon,null],[b.lat,b.lon,null]];const k=routeKey(a,b,prof);if(routeCache.has(k))return routeCache.get(k);
+async function routeSeg(a,b,mode,art){const prof=ARTS[art].prof;if(mode==="ski"&&ARTS[art].ski){const k="ski|"+routeKey(a,b,"");if(routeCache.has(k))return routeCache.get(k);const L=await skiRoute(a,b);routeCache.set(k,L);return L;}
+  if(mode==="luft"||!prof)return [[a.lat,a.lon,null],[b.lat,b.lon,null]];const k=routeKey(a,b,prof);if(routeCache.has(k))return routeCache.get(k);
   if(!navigator.onLine)throw new Error("offline");const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),30000);
   try{const r=await fetch(`https://brouter.de/brouter?lonlats=${a.lon.toFixed(6)},${a.lat.toFixed(6)}|${b.lon.toFixed(6)},${b.lat.toFixed(6)}&profile=${prof}&alternativeidx=0&format=geojson`,{signal:ctl.signal});
     const tx=await r.text();if(!r.ok)throw new Error(tx.slice(0,120));const g=JSON.parse(tx);const c=g.features[0].geometry.coordinates;const L=c.map(p=>[p[1],p[0],p[2]!=null?p[2]:null]);
     L[0]=[a.lat,a.lon,L[0][2]];L[L.length-1]=[b.lat,b.lon,L[L.length-1][2]];L._tags=wayTags(g.features[0].properties);routeCache.set(k,L);return L;}finally{clearTimeout(tm);}}
 /* Schwierigkeit aus OpenStreetMap (über BRouter): sac_scale → T1–T6, mtb:scale → S0–S5 */
 const SAC={hiking:"T1",mountain_hiking:"T2",demanding_mountain_hiking:"T3",alpine_hiking:"T4",demanding_alpine_hiking:"T5",difficult_alpine_hiking:"T6"};
+/* ---------- Skitouren: auf den swisstopo-Skirouten einrasten (Vektordaten, Kacheln 10 km, im Gerät gespeichert) ---------- */
+const SKI_T=10000,SKI_SNAP=400,SKI_AGE=180*864e5,skiMem=new Map();
+const SKI_ORDER=["L","WS-","WS","WS+","ZS-","ZS","ZS+","S-","S","S+","SS-","SS","SS+","AS-","AS","AS+","EX"];
+function skiUrl(b){return `https://api3.geo.admin.ch/rest/services/api/MapServer/identify?geometryType=esriGeometryEnvelope&geometry=${b.map(Math.round).join(",")}&imageDisplay=500,500,96&mapExtent=${b.map(Math.round).join(",")}&layers=all:ch.swisstopo-karto.skitouren&tolerance=0&sr=2056&returnGeometry=true&geometryFormat=geojson&limit=200&lang=de`;}
+async function skiFetchBox(b,lvl){const res=await fetch(skiUrl(b));if(!res.ok)throw new Error("Skirouten: Fehler "+res.status);const j=await res.json();const L=j.results||[];
+  if(L.length>=200&&lvl<3){const mx=(b[0]+b[2])/2,my=(b[1]+b[3])/2;const parts=await Promise.all([[b[0],b[1],mx,my],[mx,b[1],b[2],my],[b[0],my,mx,b[3]],[mx,my,b[2],b[3]]].map(x=>skiFetchBox(x,lvl+1)));return parts.flat();}
+  return L.map(f=>{const g=f.geometry||{},p=f.properties||f.attributes||{};const parts=g.type==="LineString"?[g.coordinates]:g.type==="MultiLineString"?g.coordinates:[];
+    return {id:String(f.featureId||f.id),v:p.difficulty_de||"",n:p.name_de||p.name||"",z:p.target_name||"",c:parts.map(l=>{const a=[];for(const q of l)a.push(Math.round(q[0]-2e6),Math.round(q[1]-1e6));return a;})};});}
+async function skiTile(tx,ty,force){const k=`ski_${tx}_${ty}`;if(!force&&skiMem.has(k))return skiMem.get(k);
+  let v=force?null:await metaGet(k,null);
+  if(!v||(navigator.onLine&&Date.now()-v.t>SKI_AGE)){if(!navigator.onLine){if(v){skiMem.set(k,v.f);return v.f;}return null;}
+    try{const f=await skiFetchBox([tx*SKI_T,ty*SKI_T,(tx+1)*SKI_T,(ty+1)*SKI_T],0);v={t:Date.now(),f};await metaSet(k,v);}catch(e){if(!v)throw e;}}
+  skiMem.set(k,v.f);if(skiMem.size>60)skiMem.delete(skiMem.keys().next().value);return v.f;}
+function skiTilesFor(E0,N0,E1,N1){const o=[];for(let x=Math.floor(Math.min(E0,E1)/SKI_T);x<=Math.floor(Math.max(E0,E1)/SKI_T);x++)for(let y=Math.floor(Math.min(N0,N1)/SKI_T);y<=Math.floor(Math.max(N0,N1)/SKI_T);y++)o.push([x,y]);return o;}
+/* Für Offline-Regionen: Skirouten im Gebiet vorab speichern */
+async function skiPrefetch(bbox){const [E0,N0]=toLV95(bbox[0],bbox[1]),[E1,N1]=toLV95(bbox[2],bbox[3]);let n=0;for(const [x,y] of skiTilesFor(E0,N0,E1,N1)){try{if(await skiTile(x,y))n++;}catch(e){}}return n;}
+function skiGraph(feats){const idx=new Map(),X=[],Y=[],adj=[];const seen=new Set();const F=[];
+  const node=(x,y)=>{const k=x*4e6+y;let i=idx.get(k);if(i==null){i=X.length;idx.set(k,i);X.push(x);Y.push(y);adj.push([]);}return i;};
+  for(const f of feats){if(seen.has(f.id))continue;seen.add(f.id);const fi=F.length;F.push(f);
+    for(const a of f.c){let prev=-1;for(let i=0;i<a.length;i+=2){const n=node(a[i],a[i+1]);if(prev>=0&&prev!==n){const w=Math.hypot(X[n]-X[prev],Y[n]-Y[prev]);adj[prev].push(n,w,fi);adj[n].push(prev,w,fi);}prev=n;}}}
+  return {X,Y,adj,F};}
+function skiNearest(G,x,y){let bi=-1,bd=Infinity;for(let i=0;i<G.X.length;i++){const d=Math.hypot(G.X[i]-x,G.Y[i]-y);if(d<bd){bd=d;bi=i;}}return bd<=SKI_SNAP?{i:bi,d:bd}:null;}
+function skiPath(G,s,t){const n=G.X.length,dist=new Float64Array(n).fill(Infinity),prev=new Int32Array(n).fill(-1),pf=new Int32Array(n).fill(-1);dist[s]=0;
+  const h=[[0,s]];const push=e=>{h.push(e);let i=h.length-1;while(i){const p=(i-1)>>1;if(h[p][0]<=h[i][0])break;[h[p],h[i]]=[h[i],h[p]];i=p;}};
+  const pop=()=>{const top=h[0],last=h.pop();if(h.length){h[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<h.length&&h[l][0]<h[m][0])m=l;if(r<h.length&&h[r][0]<h[m][0])m=r;if(m===i)break;[h[m],h[i]]=[h[i],h[m]];i=m;}}return top;};
+  while(h.length){const [d,u]=pop();if(d>dist[u])continue;if(u===t)break;const a=G.adj[u];for(let k=0;k<a.length;k+=3){const v=a[k],nd=d+a[k+1];if(nd<dist[v]){dist[v]=nd;prev[v]=u;pf[v]=a[k+2];push([nd,v]);}}}
+  if(dist[t]===Infinity)return null;const path=[],fs=[];for(let v=t;v>=0;v=prev[v]){path.push(v);fs.push(pf[v]);}path.reverse();fs.reverse();return {path,fs,len:dist[t]};}
+async function skiRoute(a,b){const [Ea,Na]=toLV95(a.lat,a.lon),[Eb,Nb]=toLV95(b.lat,b.lon);const m=3000;
+  const tiles=skiTilesFor(Math.min(Ea,Eb)-m,Math.min(Na,Nb)-m,Math.max(Ea,Eb)+m,Math.max(Na,Nb)+m);if(tiles.length>16)throw new Error("Abschnitt zu lang");
+  const feats=[];for(const [x,y] of tiles){const f=await skiTile(x,y);if(!f)throw new Error("offline");feats.push(...f);}
+  const G=skiGraph(feats);const xa=Ea-2e6,ya=Na-1e6,xb=Eb-2e6,yb=Nb-1e6;const sa=skiNearest(G,xa,ya),sb=skiNearest(G,xb,yb);if(!sa||!sb)throw new Error("keine Skiroute");
+  const r=skiPath(G,sa.i,sb.i);if(!r)throw new Error("keine Skiroute");
+  const L=[[a.lat,a.lon,null]],tags=[];let px=xa,py=ya;
+  /* Gemeinsame Abschnitte mehrerer Routen: die leichteste Route zählt (z. B. Hüttenweg statt Gipfelroute) */
+  const rk=v=>{const i=SKI_ORDER.indexOf(v);return i<0?99:i;};const best=(u,v)=>{const A=G.adj[u];let bf=null;for(let k=0;k<A.length;k+=3)if(A[k]===v){const f=G.F[A[k+2]];if(!bf||rk(f.v)<rk(bf.v))bf=f;}return bf;};
+  r.path.forEach((n,k)=>{const ll=fromLV95(G.X[n]+2e6,G.Y[n]+1e6);const d=Math.hypot(G.X[n]-px,G.Y[n]-py);px=G.X[n];py=G.Y[n];L.push([ll[0],ll[1],null]);
+    const f=k?best(r.path[k-1],n):null;if(f&&d>0)tags.push({lat:ll[0],lon:ll[1],d,ski:f.v||null,name:f.n,goal:f.z});});
+  L.push([b.lat,b.lon,null]);L._tags=tags;L._skiOff=Math.round(sa.d+sb.d);return L;}
 function wayTags(pr){const m=pr&&pr.messages;if(!m||m.length<2)return null;const h=m[0];const iLo=h.indexOf("Longitude"),iLa=h.indexOf("Latitude"),iD=h.indexOf("Distance"),iW=h.indexOf("WayTags");if(iW<0||iD<0)return null;
   return m.slice(1).map(r=>{const w=String(r[iW]||"");const s=(w.match(/(?:^| )sac_scale=([\w]+)/)||[])[1];const mt=(w.match(/(?:^| )mtb:scale=(\d)/)||[])[1];
     return {lat:+r[iLa]/1e6,lon:+r[iLo]/1e6,d:+r[iD]||0,sac:SAC[s]||null,mtb:mt!=null?"S"+Math.min(5,+mt):null};});}
 /* Auswertung einer Route: km pro Stufe, schwierigste Stufe und Stelle, Abdeckung */
-function routeDifficulty(segs,art){const bike=/bike|gravel/.test(art);const key=bike?"mtb":"sac";const order=bike?["S0","S1","S2","S3","S4","S5"]:["T1","T2","T3","T4","T5","T6"];
+function routeDifficulty(segs,art){const ski=!!ARTS[art]&&!!ARTS[art].ski,bike=/bike|gravel/.test(art);const key=ski?"ski":bike?"mtb":"sac";const order=ski?SKI_ORDER:bike?["S0","S1","S2","S3","S4","S5"]:["T1","T2","T3","T4","T5","T6"];const names=new Set();
   const km={};let tot=0,cov=0,top=null;
   for(const L of segs){if(!L)continue;if(!L._tags){for(let i=1;i<L.length;i++)tot+=distM(L[i-1][0],L[i-1][1],L[i][0],L[i][1]);continue;}
-    for(const t of L._tags){tot+=t.d;const v=t[key];if(!v)continue;cov+=t.d;km[v]=(km[v]||0)+t.d;if(!top||order.indexOf(v)>order.indexOf(top.v))top={v,lat:t.lat,lon:t.lon};}}
-  if(!top)return null;return {lvl:top.v,lat:top.lat,lon:top.lon,km:order.filter(o=>km[o]).map(o=>[o,Math.round(km[o])]),cov:tot?Math.round(cov/tot*100):0,scale:bike?"MTB":"SAC"};}
-function diffHTML(d){if(!d)return "";return `<div class="card"><h3>Schwierigkeit (Vorschlag)</h3><div class="row"><span class="tag" style="font-size:15px">${esc(d.lvl)}</span><span class="grow muted small">schwierigster Abschnitt laut OpenStreetMap (${d.scale}-Skala) · Angaben für ${d.cov} % der Strecke</span>
+    for(const t of L._tags){tot+=t.d;const v=t[key];if(!v)continue;cov+=t.d;km[v]=(km[v]||0)+t.d;if(t.name)names.add(t.goal?`${t.goal} (${t.name})`:t.name);if(!top||order.indexOf(v)>order.indexOf(top.v))top={v,lat:t.lat,lon:t.lon};}}
+  if(!top)return null;return {lvl:top.v,lat:top.lat,lon:top.lon,km:order.filter(o=>km[o]).map(o=>[o,Math.round(km[o])]),cov:tot?Math.round(cov/tot*100):0,scale:ski?"SAC-Skitouren":bike?"MTB":"SAC",src:ski?"swisstopo-Skirouten":"OpenStreetMap",names:[...names].slice(0,4)};}
+function diffHTML(d){if(!d)return "";return `<div class="card"><h3>Schwierigkeit (Vorschlag)</h3><div class="row"><span class="tag" style="font-size:15px">${esc(d.lvl)}</span><span class="grow muted small">schwierigster Abschnitt laut ${d.src||"OpenStreetMap"} (${d.scale}-Skala) · Angaben für ${d.cov} % der Strecke</span>
    ${d.lat!=null?`<button class="btn sm" data-diffshow="${d.lat},${d.lon}">Stelle zeigen</button>`:""}</div>
-   <div class="small" style="margin-top:6px">${d.km.map(([k,m])=>`${k}: ${fmtN(m/1000,1)} km`).join(" · ")}</div></div>`;}
+   <div class="small" style="margin-top:6px">${d.km.map(([k,m])=>`${k}: ${fmtN(m/1000,1)} km`).join(" · ")}</div>${d.names&&d.names.length?`<div class="muted small" style="margin-top:4px">Skirouten: ${d.names.map(esc).join(" · ")}</div>`:""}</div>`;}
 function bindDiff(P){$$("[data-diffshow]",P).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.diffshow.split(",").map(Number);setTemp(la,lo);map.flyTo(la,lo,Math.max(map.z,15));});}
 async function planRoute(){const ps=planState;if(!ps)return;ps.busy++;planMarkers();map.render();
   try{const n=ps.wps.length;const segs=[];let fail=0;
     for(let i=1;i<n;i++){const a=ps.wps[i-1],b=ps.wps[i];const old=ps.segs[i-1];
-      if(old&&old.length>1&&Math.abs(old[0][0]-a.lat)<1e-7&&Math.abs(old[old.length-1][0]-b.lat)<1e-7&&Math.abs(old[0][1]-a.lon)<1e-7&&Math.abs(old[old.length-1][1]-b.lon)<1e-7&&old._m===b.mode){segs.push(old);continue;}
-      let L;try{L=await routeSeg(a,b,b.mode,ps.art);}catch(e){fail++;L=[[a.lat,a.lon,null],[b.lat,b.lon,null]];}L._m=b.mode;segs.push(L);}
-    if(planState!==ps)return;ps.segs=segs;if(fail)toast(navigator.onLine?"Für einen Abschnitt kein Weg gefunden – Luftlinie":"Offline: Abschnitte als Luftlinie",3500);
+      if(old&&old.length>1&&Math.abs(old[0][0]-a.lat)<1e-7&&Math.abs(old[old.length-1][0]-b.lat)<1e-7&&Math.abs(old[0][1]-a.lon)<1e-7&&Math.abs(old[old.length-1][1]-b.lon)<1e-7&&old._m===b.mode&&!old._fb){segs.push(old);continue;}
+      let L;try{L=await routeSeg(a,b,b.mode,ps.art);}catch(e){fail++;L=[[a.lat,a.lon,null],[b.lat,b.lon,null]];L._fb=1;}L._m=b.mode;segs.push(L);}
+    if(planState!==ps)return;ps.segs=segs;if(fail)toast(navigator.onLine?(ARTS[ps.art].ski&&segs.some(x=>x._m==="ski"&&x._fb)?"Hier keine Skiroute in der Nähe – Abschnitt als Luftlinie":"Für einen Abschnitt kein Weg gefunden – Luftlinie"):"Offline: Abschnitte als Luftlinie",3500);
     planStats();map.render();clearTimeout(ps.pt);ps.pt=setTimeout(()=>planProfile(),600);}
   finally{ps.busy--;}}
 function planLine(){const ps=planState;const out=[];ps.segs.forEach((s,i)=>{(s||[]).forEach((p,k)=>{if(i&&!k)return;out.push(p);});});return out;}
@@ -229,24 +290,26 @@ async function planProfile(){const ps=planState;if(!ps)return;const L=planLine()
     ps.prof=prof;ps.profFor=key;ps.up=Math.round(up);ps.down=Math.round(dn);}catch(e){}refreshPlanPanel();}
 function drawPlan(c,m){const ps=planState;if(!ps)return;const col=ARTS[ps.art].c;
   ps.segs.forEach((L,i)=>{if(!L||L.length<2)return;c.beginPath();L.forEach((p,k)=>{const q=m.project(p[0],p[1]);k?c.lineTo(q.x,q.y):c.moveTo(q.x,q.y);});
-    c.lineJoin=c.lineCap="round";c.setLineDash([]);c.strokeStyle="#fff";c.lineWidth=8;c.stroke();c.strokeStyle=col;c.lineWidth=4.5;if(L._m==="luft")c.setLineDash([10,8]);c.stroke();c.setLineDash([]);});}
+    c.lineJoin=c.lineCap="round";c.setLineDash([]);c.strokeStyle="#fff";c.lineWidth=8;c.stroke();c.strokeStyle=col;c.lineWidth=4.5;if(L._m==="luft"||L._fb)c.setLineDash([10,8]);c.stroke();c.setLineDash([]);});}
 function refreshPlanPanel(){if(nav.length&&nav[nav.length-1].fn===planPanel)refreshPanel();else if(planState&&!nav.length)openPanel(planPanel,{half:true});}
 function planPanel(){const ps=planState;if(!ps)return {title:"Planen",html:`<div class="empty">Keine Planung offen</div>`};const t=tempoFor(ps.art);const fac=(S.settings.tempoFactor||{})[ps.art]||1;
   const est=ps.up!=null?estTime(ps.dist/1000,ps.up,ps.down,t):null;
   return {title:ps.editId?"Route ändern":"Tour planen",icon:`<svg><use href="#i-flag"/></svg>`,half:true,html:`
-   ${ps.wps.length<2?`<div class="note">Punkte der Reihe nach auf der Karte antippen. Die Linie folgt ${ARTS[ps.art].prof?"den Wegen (Umschalten auf «Luftlinie» für Abschnitte abseits der Wege)":"als Luftlinie (Skitouren und Winterhochtouren verlaufen meist abseits der Wege)"}.<br>Punkte ziehen = verschieben · lange drücken = entfernen · auf die Linie tippen = Zwischenpunkt.</div>`:""}
+   <div class="chips" id="plArts" style="margin-bottom:10px">${Object.entries(ARTS).map(([k,a])=>`<button class="chip${ps.art===k?" on":""}" data-art="${k}">${a.n}</button>`).join("")}</div>
+   ${ps.wps.length<2?`<div class="note">Zuerst oben die Art wählen, dann die Punkte der Reihe nach auf der Karte antippen. Die Linie folgt ${ARTS[ps.art].ski?"den Skirouten von swisstopo (wo keine verläuft: Luftlinie)":ARTS[ps.art].prof?"den Wegen (Umschalten auf «Luftlinie» für Abschnitte abseits der Wege)":"als Luftlinie"}.<br>Punkte ziehen = verschieben · lange drücken = entfernen · auf die Linie tippen = Zwischenpunkt.</div>`:""}
    <div class="kv"><div><b>${fmtKm(ps.dist||0)}</b><small>Distanz</small></div><div><b>${ps.up!=null?fmtN(ps.up)+" m":"…"}</b><small>Aufstieg</small></div><div><b>${ps.down!=null?fmtN(ps.down)+" m":"…"}</b><small>Abstieg</small></div><div><b>${est!=null?fmtDur(est):"…"}</b><small>Zeit (dein Tempo)</small></div></div>
    ${ps.prof&&ps.prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="plProf"></canvas><div class="muted small" id="plProfI">Höhen: swissALTI3D</div></div>`:ps.wps.length>1?`<p class="muted small">${navigator.onLine?"Höhenprofil wird geladen …":"Höhenprofil nur online (swisstopo)"}</p>`:""}
    ${diffHTML(routeDifficulty(ps.segs,ps.art))}
    <div class="card"><div class="crit"><span>Tempo ${(fac*100).toFixed(0)} %<br><small class="muted">${fmtN(t.vf,1)} km/h · ↑${fmtN(t.vu)} · ↓${fmtN(t.vd)} Hm/h</small></span><input type="range" id="plF" min="60" max="150" step="5" value="${Math.round(fac*100)}" style="flex:1;max-width:180px"></div></div>
-   <div class="btns"><button class="btn pri" id="plS"${ps.wps.length<2?" disabled":""}><svg><use href="#i-check"/></svg>Als Idee speichern</button><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
+   <div class="btns"><button class="btn" id="plU2"${ps.undo.length?"":" disabled"}><svg><use href="#i-undo"/></svg>Rückgängig</button><button class="btn pri" id="plS"${ps.wps.length<2?" disabled":""}><svg><use href="#i-check"/></svg>Als Idee speichern</button><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
     <button class="btn" id="plRev"${ps.wps.length<2?" disabled":""}>Umkehren</button><button class="btn" id="plZ"${ps.wps.length<2?" disabled":""}>Zurück zum Start</button></div>`,
    after(P){if(ps.prof&&ps.prof.length>1)drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P)});bindDiff(P);
+     $$("[data-art]",P).forEach(b=>b.onclick=()=>{if(b.dataset.art!==ps.art)setPlanArt(b.dataset.art);});
      $("#plF",P).onchange=async e=>{S.settings.tempoFactor=Object.assign({},S.settings.tempoFactor||{});S.settings.tempoFactor[ps.art]=+e.target.value/100;await saveSettings();refreshPanel();};
      $("#plRev",P).onclick=async()=>{snap();ps.wps.reverse();ps.segs=[];await planRoute();refreshPanel();};
      $("#plZ",P).onclick=async()=>{snap();const a=ps.wps[0];ps.wps.push({lat:a.lat,lon:a.lon,mode:ps.mode});await planRoute();refreshPanel();};
      $("#plG",P).onclick=()=>{const L=planLine();download(`${fileSafe(ps.name||"Planung")}.gpx`,toGPX(ps.name||"Boschor Map Planung",L.map(p=>[p[0],p[1],p[2],null])),"application/gpx+xml");};
-     $("#plS",P).onclick=savePlan;}};}
+     $("#plS",P).onclick=savePlan;$("#plU2",P).onclick=planUndo;}};}
 async function savePlan(){const ps=planState;if(!ps||ps.wps.length<2)return;if(!ps.prof&&navigator.onLine){clearTimeout(ps.pt);toast("Höhenprofil wird geladen …");await planProfile();if(planState!==ps)return;}const def=ps.name||planName();const name=prompt("Name der Tour-Idee",def);if(name===null)return;
   const L=planLine();let line=L.map(p=>[p[0],p[1],p[2]!=null?p[2]:null,null]);
   if(ps.prof&&ps.prof.length>1){/* Höhen aus swissALTI3D auf die Linie übertragen */let d=0,j=0;line=line.map((p,i)=>{if(i)d+=distM(line[i-1][0],line[i-1][1],p[0],p[1]);const f=d/ps.dist*ps.prof[ps.prof.length-1].d;
@@ -264,7 +327,7 @@ function planName(){const ps=planState;const near=(w)=>{let b=null;for(const p o
 /* Wegpunkte verschieben und entfernen */
 function bootPlanEvents(){map.on("markerdragstart",e=>{if(e.marker.wp&&planState)snap();});
   map.on("markerdragend",async e=>{const w=e.marker.wp;if(!w||!planState)return;w.lat=e.lat;w.lon=e.lon;await planRoute();refreshPlanPanel();});
-  map.on("markerlong",async e=>{const w=e.marker.wp;if(!w||!planState)return;snap();const i=planState.wps.indexOf(w);if(i<0)return;map.removeMarker(w.mk);planState.wps.splice(i,1);planState.segs=[];await planRoute();refreshPlanPanel();});}
+  map.on("markerlong",async e=>{const w=e.marker.wp;if(!w||!planState)return;closeWpMenu();return planRemoveWp(w);});}
 
 /* ---------- Persönliches Tempo ---------- */
 function tempoPanel(){const arts=Object.keys(ARTS);
@@ -336,3 +399,87 @@ function checklistPanel(art){if(art)chkArt=art;if(!chkArt)chkArt=ls("chkArt")||"
      $("#cAdd",P).onclick=add;$("#cNew",P).onkeydown=e=>{if(e.key==="Enter")add();};
      $("#cReset",P).onclick=async()=>{S.settings.checkState=S.settings.checkState||{};S.settings.checkState[a]={};await saveSettings(false);refreshPanel();};
      $("#cDef",P).onclick=async()=>{if(!confirm("Liste auf die Vorgabe zurücksetzen?"))return;S.settings.checklists[a]=DEFAULT_CHECK[a].slice();S.settings.checkState[a]={};await save();};}};}
+
+/* ---------- Fotos zur Tour: Stelle auf der Route über die Aufnahmezeit (Track) oder den Aufnahmeort ---------- */
+const PH_TOL=10*60000,PH_NEAR=200;
+function trackCum(line){const c=new Float64Array(line.length);for(let i=1;i<line.length;i++)c[i]=c[i-1]+distM(line[i-1][0],line[i-1][1],line[i][0],line[i][1]);return c;}
+function trackTimed(line){return !!(line&&line.length>1&&line[0][3]!=null&&line[line.length-1][3]!=null);}
+function placeOnTrack(line,cum,ph,off){if(!line||line.length<2)return null;const n=line.length,P=(i,how)=>({lat:line[i][0],lon:line[i][1],h:line[i][2],d:cum[i],how});
+  if(ph.t&&trackTimed(line)){const tt=ph.t+(off||0),t0=line[0][3],t1=line[n-1][3];
+    if(tt>=t0-PH_TOL&&tt<=t1+PH_TOL){if(tt<=t0)return P(0,"zeit");if(tt>=t1)return P(n-1,"zeit");let lo=0,hi=n-1;
+      while(hi-lo>1){const m=(lo+hi)>>1,tm=line[m][3];if(tm==null||tm<=tt)lo=m;else hi=m;}
+      const a=line[lo],b=line[hi];const f=b[3]!=null&&a[3]!=null&&b[3]>a[3]?(tt-a[3])/(b[3]-a[3]):0;
+      return {lat:a[0]+(b[0]-a[0])*f,lon:a[1]+(b[1]-a[1])*f,h:a[2]!=null&&b[2]!=null?a[2]+(b[2]-a[2])*f:a[2],d:cum[lo]+(cum[hi]-cum[lo])*f,how:"zeit"};}}
+  if(ph.lat!=null){let bi=0,bd=Infinity;for(let i=0;i<n;i++){const d=distM(ph.lat,ph.lon,line[i][0],line[i][1]);if(d<bd){bd=d;bi=i;}}
+    if(bd<=PH_NEAR)return {lat:ph.lat,lon:ph.lon,h:line[bi][2],d:cum[bi],how:"ort"};}
+  return null;}
+const fmtClock=ms=>{const d=new Date(ms);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+function tourPhotoCap(x){return [x.d!=null?fmtKm(x.d):"",x.h!=null?fmtN(Math.round(x.h))+" m":"",x.t?fmtClock(x.t):""].filter(Boolean).join(" · ");}
+function sortTourPhotos(t){t.photos=(t.photos||[]).sort((a,b)=>(a.d==null)-(b.d==null)||(a.d||0)-(b.d||0)||(a.t||0)-(b.t||0));}
+function tourPhotoMarks(t){return (t.photos||[]).map(x=>({d:x.d,h:x.h}));}
+function openTourPhoto(t,i){const ph=t.photos||[];showGallery(ph.map(x=>x.id),i,{cap:k=>tourPhotoCap(ph[k])});}
+
+/* Fotopunkte auf der Karte (nur bei der gewählten Tour) */
+let tpm=[],tpmFor=null;
+function clearTourPhotoMarks(){for(const m of tpm)map.removeMarker(m);tpm=[];tpmFor=null;}
+function setTourPhotoMarks(t){clearTourPhotoMarks();if(!t||!(t.photos||[]).length)return;tpmFor=t.id;
+  t.photos.forEach((x,i)=>{if(x.lat==null)return;const m=map.addMarker({lat:x.lat,lon:x.lon,anchor:[13,13],html:`<div class="phm"><svg><use href="#i-cam"/></svg></div>`,z:45});m.onClick=()=>openTourPhoto(t,i);tpm.push(m);});}
+
+function tourPhotoCard(t,idea){const ph=t.photos||[];
+  return `<div class="card"><h3>Fotos${ph.length?` <span class="muted small">${ph.length}</span>`:""}</h3>
+    ${ph.length?`<div class="tph">${ph.map((x,i)=>`<button data-tp="${i}" aria-label="Foto ${i+1}"><img alt="" data-tpi="${x.id}">${x.d!=null?`<small>${fmtKm(x.d)}</small>`:""}</button>`).join("")}</div>`
+      :`<p class="muted small" style="margin:4px 0 8px">${idea?"Fotos lassen sich bei gemachten Touren zuordnen.":"Unterwegs normal fotografieren und hier zuordnen. Die Stelle auf der Route ergibt sich aus der Aufnahmezeit."}</p>`}
+    ${idea?"":`<div class="btns"><button class="btn" id="tPh"><svg><use href="#i-cam"/></svg>Fotos zuordnen</button>${ph.length?`<button class="btn" id="tPhE"><svg><use href="#i-edit"/></svg>Bearbeiten</button>`:""}</div>`}</div>`;}
+function bindTourPhotoCard(P,t){$$("[data-tpi]",P).forEach(async im=>{im.src=await thumbURL(im.dataset.tpi);});
+  $$("[data-tp]",P).forEach(b=>b.onclick=()=>openTourPhoto(t,+b.dataset.tp));
+  const a=$("#tPh",P);if(a)a.onclick=()=>{const f=$("#fTPh");f.onchange=()=>{const fs=[...f.files];f.value="";if(fs.length)tourPhotoAssign(t,fs);};f.click();};
+  const e=$("#tPhE",P);if(e)e.onclick=()=>openPanel(()=>tourPhotoEditPanel(t));}
+
+async function tourPhotoAssign(t,files){const have=new Set((t.photos||[]).map(x=>x.src).filter(Boolean));const items=[];let dup=0;
+  try{for(let i=0;i<files.length;i++){if(i%3===0)progress("Fotos lesen",i,files.length,"Aufnahmezeit und -ort …");const f=files[i];const src=f.name+"|"+f.size+"|"+f.lastModified;
+      if(have.has(src)){dup++;continue;}const info=await exifInfo(f);items.push({file:f,src,t:info.time||f.lastModified||0,exif:!!info.time,lat:info.ll?info.ll[0]:null,lon:info.ll?info.ll[1]:null});}}
+  finally{progressDone();}
+  if(!items.length)return toast(dup?"Diese Fotos sind schon bei der Tour":"Keine Fotos gewählt");
+  const line=await tourLine(t.id);if(!line)return toast("Linie fehlt (noch nicht abgeglichen?)");const cum=trackCum(line);const timed=trackTimed(line);
+  const calc=off=>items.map(it=>placeOnTrack(line,cum,it,off));const count=off=>calc(off).filter(Boolean).length;
+  let off=0,extra=false;
+  /* Zeitverschiebung vorschlagen (z. B. Kamera noch auf Sommerzeit) */
+  let sugg=null;if(timed&&count(0)<items.length){let best=count(0);for(const h of [-2,-1,1,2]){const c=count(h*3600000);if(c>best){best=c;sugg=h*60;}}}
+  openPanel(()=>{const res=calc(off*60000);const zt=res.filter(r=>r&&r.how==="zeit").length,zo=res.filter(r=>r&&r.how==="ort").length,no=res.length-zt-zo;
+    const tr=timed?`${fmtClock(line[0][3])}–${fmtClock(line[line.length-1][3])}`:"";const pts=items.filter(x=>x.t).map(x=>x.t+off*60000);
+    const pr=pts.length?`${fmtClock(Math.min(...pts))}–${fmtClock(Math.max(...pts))}`:"";
+    return {title:"Fotos zuordnen",icon:`<svg><use href="#i-cam"/></svg>`,html:`
+     <div class="card"><div class="kv"><div><b>${zt}</b><small>über die Zeit</small></div><div><b>${zo}</b><small>über den Ort</small></div><div><b>${no}</b><small>passen nicht</small></div></div>
+      <p class="muted small">${timed?`Tour ${tr}${pr?` · Fotos ${pr}`:""}`:"Diese Tour hat keine Zeiten – Zuordnung nur über den Aufnahmeort (bis 200 m neben der Route)."}${dup?` · ${dup} schon vorhanden`:""}</p>
+      ${timed?`<label class="f">Zeit der Fotos verschieben</label><div class="offr"><button class="btn" data-off="-5">−5</button><button class="btn" data-off="-1">−1</button><b>${off>0?"+":""}${off} min</b><button class="btn" data-off="1">+1</button><button class="btn" data-off="5">+5</button></div>
+      <p class="muted small" style="margin:0">Nur nötig, wenn die Handyzeit nicht mit der Uhr übereinstimmt.</p>`:""}
+      ${sugg!=null&&off!==sugg?`<button class="btn full" id="aSug" style="margin-top:8px">${sugg>0?"+":""}${sugg/60} h verschieben (Zeitzone?) – dann passen ${count(sugg*60000)}</button>`:""}
+      ${no?`<label class="chk" style="margin-top:8px"><input type="checkbox" id="aEx"${extra?" checked":""}><span>Die ${no} übrigen trotzdem zur Tour (ohne Stelle auf der Route)</span></label>`:""}</div>
+     <button class="btn pri full" id="aOk"${zt+zo+(extra?no:0)?"":" disabled"}><svg><use href="#i-check"/></svg>${zt+zo+(extra?no:0)} Fotos übernehmen</button>`,
+     after(P){$$("[data-off]",P).forEach(b=>b.onclick=()=>{off+=+b.dataset.off;refreshPanel();});const sg=$("#aSug",P);if(sg)sg.onclick=()=>{off=sugg;refreshPanel();};
+       const ex=$("#aEx",P);if(ex)ex.onchange=()=>{extra=ex.checked;refreshPanel();};
+       $("#aOk",P).onclick=async()=>{const r=calc(off*60000);const sel=items.map((it,i)=>({it,p:r[i]})).filter(x=>x.p||extra);let k=0;
+         try{t.photos=t.photos||[];for(const x of sel){k++;progress("Fotos speichern",k,sel.length,x.it.file.name);
+             const id=await storePhoto(x.it.file,t.id,{time:x.it.t,ll:x.it.lat!=null?[x.it.lat,x.it.lon]:null});const p=x.p||{};
+             t.photos.push({id,t:x.it.t?x.it.t+off*60000:0,lat:p.lat!=null?r5(p.lat):null,lon:p.lon!=null?r5(p.lon):null,h:p.h!=null?Math.round(p.h):null,d:p.d!=null?Math.round(p.d):null,src:x.it.src});}
+           sortTourPhotos(t);await saveTour(t);}catch(e){toast("Fotos: "+e.message,5000);}finally{progressDone();}
+         showTour(t.id,true);toast(`${sel.length} Foto${sel.length>1?"s":""} zur Tour`);};}};});}
+
+function tourPhotoEditPanel(t){return {title:"Fotos bearbeiten",html:`<div class="card">${(t.photos||[]).map((x,i)=>`<div class="phl"><img alt="" data-tpi="${x.id}"><span>${esc(tourPhotoCap(x)||"ohne Stelle")}</span>
+    <button class="ib" data-tpd="${i}" aria-label="Foto entfernen"><svg><use href="#i-trash"/></svg></button></div>`).join("")||`<div class="muted">Keine Fotos.</div>`}</div>`,
+  after(P){$$("[data-tpi]",P).forEach(async im=>{im.src=await thumbURL(im.dataset.tpi);});
+    $$("[data-tpd]",P).forEach(b=>b.onclick=async()=>{if(!confirm("Foto von der Tour entfernen?"))return;const x=t.photos.splice(+b.dataset.tpd,1)[0];
+      t.phDel=(t.phDel||[]).concat(x.id).slice(-200);try{await del("photos",x.id);}catch(e){}await saveTour(t);setTourPhotoMarks(t);refreshPanel();});}};}
+
+/* Unterwegs fotografieren: Zeit und Standort festhalten, beim GPX-Import der Tour zuordnen */
+async function tripCam(){const me=locateOnce();const f=$("#fCam");f.onchange=async()=>{const x=f.files[0];f.value="";if(!x)return;const tt=Date.now();
+    progress("Foto speichern",0,0,"");try{const pos=await Promise.race([me,sleep(4000).then(()=>S.me||null)]);const info=await exifInfo(x);
+      const id=await storePhoto(x,"",{time:info.time||tt,ll:pos?[pos.lat,pos.lon]:info.ll});const list=await metaGet("tripCam",[]);
+      list.push({id,t:info.time||tt,lat:pos?r5(pos.lat):info.ll?r5(info.ll[0]):null,lon:pos?r5(pos.lon):info.ll?r5(info.ll[1]):null});await metaSet("tripCam",list);
+      toast(`Foto gespeichert – kommt beim GPX-Import auf die Route (${list.length} wartend)`,4000);}catch(e){toast("Foto: "+e.message,5000);}finally{progressDone();}};
+  f.click();}
+async function attachTripPhotos(t,line){const list=await metaGet("tripCam",[]);if(!list.length||!line)return 0;const cum=trackCum(line);const rest=[];let n=0;
+  for(const x of list){const p=placeOnTrack(line,cum,x,0);if(!p||(p.how==="ort"&&trackTimed(line))){rest.push(x);continue;}
+    t.photos=t.photos||[];t.photos.push({id:x.id,t:x.t,lat:r5(p.lat),lon:r5(p.lon),h:p.h!=null?Math.round(p.h):null,d:Math.round(p.d)});
+    const ph=await getOne("photos",x.id);if(ph){ph.pid=t.id;await put("photos",ph);}n++;}
+  if(n){sortTourPhotos(t);await saveTour(t);}if(rest.length!==list.length)await metaSet("tripCam",rest);return n;}

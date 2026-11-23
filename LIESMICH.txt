@@ -1,4 +1,4 @@
-Boschor Map – v1.8 (privates Projekt)
+Boschor Map – v1.9 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,20 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.9
+- Planen: zuerst oben im Panel die Art wählen. Skitour und Winterhochtour rasten auf den Skirouten von swisstopo
+  ein (Schwierigkeit nach SAC-Skitourenskala, Routennamen). Ohne Skiroute in der Nähe: gestrichelte Luftlinie.
+  Einmal geladene Skirouten bleiben im Gerät (offline); Offline-Regionen mit Winterkarte laden sie mit.
+- Planen: «Rückgängig» auch unten im Panel und mit Ctrl+Z; Wegpunkt antippen = Menü (Entfernen, Abschnitt davor
+  als Luftlinie bzw. zurück). Fehler behoben: nach Rückgängig blieben lose Punkte auf der Karte.
+- Fotos zur Tour: unterwegs normal fotografieren, bei der Tour «Fotos zuordnen» – die Stelle auf der Route ergibt
+  sich aus der Aufnahmezeit. Fotopunkte auf der Karte, Marken im Höhenprofil, Galerie mit km, Höhe und Uhrzeit.
+  «Foto unterwegs» (Kamera-Knopf bei eingeschaltetem Standort) kommt beim GPX-Import automatisch auf die Route.
+- Offline-Regionen bis 3'000 km² (begrenzt durch den freien Speicher), mit geschätzter Dauer, doppelt so schnell.
+  Beim Wählen des Ausschnitts bleibt die Karte frei; das Formular kommt erst mit «Weiter».
+- Wetter: Prognose zuoberst, darunter «Jetzt gemessen» und das Bulletin.
+- PC: Mauszeiger passend (Pfeil, Fadenkreuz beim Planen, Hand beim Ziehen).
 
 NEU IN v1.8
 - Suunto teilt einen Link statt einer Datei: Boschor Map lädt das GPX-Workout jetzt selbst über diesen Link
@@ -120,7 +134,7 @@ NEU IN v1.1 (erste Version)
   und Vergleich geschätzt/tatsächlich. Regler für das eigene Tempo.
 - Ideen: Tourideen nach Art, Dauer und Entfernung ab Zuhause, mit Wetter und Lawinengefahr.
 - Offline-Regionen: Ausschnitt mit vier Griffen wählen, Karten, Ebenen und Zoomstufe wählen, Grösse wird
-  vorher geschätzt (max. 300 km² und 20'000 Kacheln). Download massvoll mit Fortschritt (erledigt / läuft /
+  vorher geschätzt (max. 3'000 km² und 150'000 Kacheln, begrenzt auch durch den freien Speicher). Download massvoll mit Fortschritt (erledigt / läuft /
   kommt noch), anhalten, fortsetzen, löschen. Orts- und Gipfelnamen der Region für die Suche ohne Netz.
 - Lawinenbulletin (SLF) und Wetterprognose (MeteoSchweiz) für die ganze Schweiz offline speichern;
   pro Ort und Tour: Gefahrenstufe, Probleme mit Expositionen und Höhen, kritischer Bereich im Höhenprofil,

@@ -1,6 +1,6 @@
 /* Boschor Map – Grundlagen: Hilfsfunktionen, Speicher (IndexedDB), Koordinaten, Konstanten */
 "use strict";
-const APP_VERSION="1.8";
+const APP_VERSION="1.9";
 const LSP="bm_";            /* eigenes localStorage-Präfix – getrennt von IbexMap auf derselben Herkunft */
 const DBN="boschormap",TDBN="boschormap-tiles";
 
@@ -85,10 +85,10 @@ const CATS={
   see:{n:"See",c:"#0b5f99",c2:"#35b3ea"},ort:{n:"Schöner Ort",c:"#1f6b3a",c2:"#5cc07a"},start:{n:"Start / Parkplatz",c:"#2b3946",c2:"#6d8191"}};
 const CRIT={huette:[["schoen","Wie schön"],["gemuetlich","Wie gemütlich"]],ort:[["schoen","Wie schön"]],see:[["schoen","Wie schön"]],gipfel:[["schoen","Aussicht / wie schön"]],pass:[["schoen","Wie schön"]],start:[]};
 const ARTS={
-  skitour:{n:"Skitour",c:"#1565c0",prof:null,t:{vf:4,vu:400,vd:1500}},
+  skitour:{n:"Skitour",c:"#1565c0",prof:null,ski:true,t:{vf:4,vu:400,vd:1500}},
   wandern:{n:"Wanderung",c:"#d32f2f",prof:"hiking-mountain",t:{vf:4.2,vu:400,vd:800}},
   hochtour:{n:"Hochtour",c:"#7b1fa2",prof:"hiking-mountain",t:{vf:3.5,vu:350,vd:600}},
-  winterhochtour:{n:"Winterhochtour",c:"#283593",prof:null,t:{vf:3.5,vu:330,vd:1000}},
+  winterhochtour:{n:"Winterhochtour",c:"#283593",prof:null,ski:true,t:{vf:3.5,vu:330,vd:1000}},
   gravel:{n:"Gravel",c:"#ef6c00",prof:"gravel",t:{vf:20,vu:700,vd:2500}},
   bike:{n:"Bike (Enduro)",c:"#2e7d32",prof:"mtb",t:{vf:14,vu:550,vd:1500}}};
 const TOUR_CRIT=[["streng","Wie streng"],["schoen","Wie schön"]];

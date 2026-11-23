@@ -64,7 +64,7 @@ function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,max
   map.on("move",()=>{$("#map").classList.toggle("zl",map.z>=13);});
   map.on("click",onMapClick);map.on("markerclick",onMarkerClick);map.on("longpress",onLongPress);
   $("#bZin").onclick=()=>map.zoomAnim(Math.round(map.z)+1);$("#bZout").onclick=()=>map.zoomAnim(Math.round(map.z)-1);
-  $("#bLayers").onclick=()=>openPanel(layersPanel);$("#bLoc").onclick=toggleLocate;$("#bAdd").onclick=startPlace;}
+  $("#bLayers").onclick=()=>openPanel(layersPanel);$("#bLoc").onclick=toggleLocate;$("#bCam").onclick=tripCam;$("#bAdd").onclick=startPlace;}
 function setBase(k){const b=BASES[k]||BASES.lk;if(baseLayer)map.removeLayer(baseLayer);
   baseLayer=map.addLayer(new BMap.TileLayer({url:layerUrl(b.id,b.f),max:b.max,min:7,z:1,bounds:CH_BOUNDS}));const v=viewPrefs();v.base=k;saveViewPrefs(v);}
 function setOverlay(k,on){const o=OVERLAYS[k];if(ovLayers[k]){ovLayers[k].forEach(l=>map.removeLayer(l));delete ovLayers[k];}
@@ -86,7 +86,7 @@ function layersPanel(){const v=viewPrefs();
 /* Touren zeichnen: vereinfachte Linie je nach Zoom, Farbe nach Art, Ideen gestrichelt */
 function tourDisp(t){return t.disp||[];}
 function visibleTours(){const v=viewPrefs();return S.tours.filter(t=>!t.del&&t.disp&&t.disp.length>1&&((t.status==="idee")?v.showIdeas!==false:v.showDone!==false)||(selTour&&t.id===selTour&&!t.del));}
-function drawTours(c,m){const b=m.getBounds();const sel=selTour;const z=m.z;
+function drawTours(c,m){const pk=!!(planState||placing);if(m.el.classList.contains("pick")!==pk)m.el.classList.toggle("pick",pk);if(tpmFor&&tpmFor!==selTour)setTimeout(clearTourPhotoMarks,0);const b=m.getBounds();const sel=selTour;const z=m.z;
   const list=visibleTours();list.sort((a,b2)=>(a.id===sel)-(b2.id===sel));
   for(const t of list){const bb=t.bbox;if(!bb||bb[2]<b[0]||bb[0]>b[2]||bb[3]<b[1]||bb[1]>b[3])continue;const isSel=t.id===sel;
     const L=(isSel&&S._selLine)?S._selLine:t.disp;const step=z<10?4:z<12?2:1;
@@ -143,8 +143,8 @@ function refreshMarkers(){const v=viewPrefs();for(const m of markers.values())ma
 
 /* ---------- Standort (ohne Aufzeichnung) ---------- */
 let locFirst=false,meAcc=null;
-function toggleLocate(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null;$("#bLoc").classList.remove("on");if(meMk){map.removeMarker(meMk);meMk=null;}meAcc=null;map.render();return;}
-  if(!navigator.geolocation)return toast("Standort nicht verfügbar");$("#bLoc").classList.add("on");locFirst=true;
+function toggleLocate(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null;$("#bLoc").classList.remove("on");$("#bCam").hidden=true;if(meMk){map.removeMarker(meMk);meMk=null;}meAcc=null;map.render();return;}
+  if(!navigator.geolocation)return toast("Standort nicht verfügbar");$("#bLoc").classList.add("on");$("#bCam").hidden=false;locFirst=true;
   watchId=navigator.geolocation.watchPosition(pos=>{const {latitude:la,longitude:lo,accuracy:ac}=pos.coords;S.me={lat:la,lon:lo};
     if(!meMk)meMk=map.addMarker({lat:la,lon:lo,cls:"",anchor:[9,9],html:`<div class="me"></div>`,z:40});else map.moveMarker(meMk,la,lo);meAcc={la,lo,ac};map.render();
     if(locFirst){locFirst=false;map.flyTo(la,lo,Math.max(map.z,14));}},err=>{toast("Standort: "+(err.code===1?"keine Berechtigung":"nicht gefunden"));toggleLocate();},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});}
@@ -152,10 +152,10 @@ miscDraw.push((c,m)=>{if(!meAcc)return;const p=m.project(meAcc.la,meAcc.lo);cons
 
 /* ---------- Punkt setzen (Fadenkreuz) ---------- */
 let placing=false;
-function startPlace(){if(planState)return toast("Zuerst die Planung beenden");closePanel();placing=true;$("#cross").hidden=false;
+function startPlace(){if(planState)return toast("Zuerst die Planung beenden");closePanel();placing=true;$("#cross").hidden=false;map.render();
   modebar(`<b class="grow">Karte unter das Kreuz schieben</b><button class="btn sm" id="mbX">Abbrechen</button><button class="btn sm pri" id="mbOk">Punkt hier setzen</button>`);
   $("#mbX").onclick=endPlace;$("#mbOk").onclick=()=>{const c=map.getCenter();endPlace();newPoint(c.lat,c.lon);};}
-function endPlace(){placing=false;$("#cross").hidden=true;modebar(null);}
+function endPlace(){placing=false;$("#cross").hidden=true;modebar(null);map.render();}
 function modebar(html){const mb=$("#modebar");if(!html){mb.hidden=true;mb.innerHTML="";return;}mb.innerHTML=html;mb.hidden=false;}
 
 /* ---------- Punkte: anlegen, anzeigen, bearbeiten ---------- */
@@ -248,12 +248,12 @@ async function thumbURL(id){if(thumbs.has(id))return thumbs.get(id);const p=awai
   if(thumbs.size>200){const k=thumbs.keys().next().value;URL.revokeObjectURL(thumbs.get(k));thumbs.delete(k);}return u;}
 /* Vollbild: blättern (wischen, Pfeile), zoomen (zwei Finger, Mausrad, Doppeltipp) */
 let galClose=null;function closeGallery(){if(galClose)galClose();}
-async function showGallery(ids,start){ids=(ids||[]).filter(Boolean);if(!ids.length)return;let i=Math.max(0,Math.min(start||0,ids.length-1)),url="";
+async function showGallery(ids,start,go_){ids=(ids||[]).filter(Boolean);if(!ids.length)return;let i=Math.max(0,Math.min(start||0,ids.length-1)),url="";
   const w=document.createElement("div");w.className="pbig";
-  w.innerHTML=`<img draggable="false" alt=""><div class="gcnt"></div>${ids.length>1?`<button class="gnav gp" aria-label="Vorheriges">‹</button><button class="gnav gn" aria-label="Nächstes">›</button>`:""}<button class="pbx" aria-label="Schliessen">✕</button>`;
+  w.innerHTML=`<img draggable="false" alt=""><div class="gcnt"></div><div class="gcap"></div>${ids.length>1?`<button class="gnav gp" aria-label="Vorheriges">‹</button><button class="gnav gn" aria-label="Nächstes">›</button>`:""}<button class="pbx" aria-label="Schliessen">✕</button>`;
   document.body.appendChild(w);const img=w.querySelector("img");let s=1,tx=0,ty=0;
   const ap=()=>{img.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;w.classList.toggle("zoomed",s>1.01);};const reset=()=>{s=1;tx=0;ty=0;ap();};
-  const show=async()=>{reset();w.querySelector(".gcnt").textContent=ids.length>1?`${i+1} / ${ids.length}`:"";try{const ph=await getOne("photos",ids[i]);if(url)URL.revokeObjectURL(url);url=ph&&ph.blob?URL.createObjectURL(ph.blob):"";img.src=url;}catch(e){}};
+  const show=async()=>{reset();w.querySelector(".gcnt").textContent=ids.length>1?`${i+1} / ${ids.length}`:"";w.querySelector(".gcap").textContent=go_&&go_.cap?go_.cap(i)||"":"";try{const ph=await getOne("photos",ids[i]);if(url)URL.revokeObjectURL(url);url=ph&&ph.blob?URL.createObjectURL(ph.blob):"";img.src=url;}catch(e){}};
   const go=d=>{if(ids.length<2)return;i=(i+d+ids.length)%ids.length;show();};
   const key=e=>{if(e.key==="ArrowRight")go(1);else if(e.key==="ArrowLeft")go(-1);else if(e.key==="Escape")galClose();};document.addEventListener("keydown",key);
   galClose=()=>{document.removeEventListener("keydown",key);if(url)URL.revokeObjectURL(url);w.remove();galClose=null;};
@@ -301,6 +301,7 @@ function morePanel(){const it=(id,ic,t,s)=>`<button class="li" data-m="${id}"><s
   return {title:"Mehr",icon:`<svg><use href="#i-more"/></svg>`,html:`
    ${it("gpx","i-gpx","GPX importieren","Touren aus der Suunto-App, auch mehrere auf einmal")}
    ${it("photos","i-cam","Fotos importieren","Fotos mit Aufnahmeort als Orte erfassen")}
+   ${it("tcam","i-cam","Foto unterwegs","Für die laufende Tour – kommt beim GPX-Import auf die Route")}
    ${it("regions","i-down","Offline-Regionen","Karten für unterwegs ohne Netz speichern")}
    ${it("cond","i-snow","Lawinenbulletin & Wetter","Für unterwegs speichern (SLF, MeteoSchweiz)")}
    ${it("tempo","i-gauge","Persönliches Tempo","Aus deinen Touren gelernt, pro Sportart")}
@@ -311,7 +312,7 @@ function morePanel(){const it=(id,ic,t,s)=>`<button class="li" data-m="${id}"><s
    ${it("settings","i-edit","Einstellungen","Zuhause, Speicher, App-Version")}
    ${it("info","i-info","Quellen und Hinweise","swisstopo, SLF, MeteoSchweiz, BRouter")}`,
    after(P){$$("[data-m]",P).forEach(b=>b.onclick=()=>{const m=b.dataset.m;
-     if(m==="gpx")$("#fGpx").click();else if(m==="photos")openPanel(photoImportStart);else if(m==="regions")openPanel(regionsPanel);else if(m==="cond")openPanel(condCenterPanel);
+     if(m==="gpx")$("#fGpx").click();else if(m==="photos")openPanel(photoImportStart);else if(m==="tcam")tripCam();else if(m==="regions")openPanel(regionsPanel);else if(m==="cond")openPanel(condCenterPanel);
      else if(m==="tempo")openPanel(tempoPanel);else if(m==="check")openPanel(()=>checklistPanel());else if(m==="admin")showAdmin();else if(m==="drive")openPanel(drivePanel);
      else if(m==="data")openPanel(dataPanel);else if(m==="settings")openPanel(settingsPanel);else if(m==="info")openPanel(infoPanel);});}};}
 function infoPanel(){return {title:"Quellen und Hinweise",html:`<div class="card"><p><b>Karten:</b> © swisstopo (Landeskarte, Winterkarte, SWISSIMAGE, Hangneigung, Skitouren- und Wanderwege), © BAFU (Wildruhezonen, Jagdbanngebiete), © ASTRA / SchweizMobil (Velo- und Mountainbike-Routen) – über geo.admin.ch.</p>
@@ -334,7 +335,7 @@ function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",h
 async function conditionsPanel(lat,lon,h,name){const b=await bulletinAt(lat,lon);const w=await weatherAt(lat,lon,h);
   let st=null;try{const m=await smnStations();if(m)st=pickStations(m.s,lat,lon,h);}catch(e){}const nc=await nowCached();
   const td=w&&w.days.find(d=>d.date===today());const tIc=td&&td.sy?wxIcon(td.sy,30):`<svg><use href="#i-sun"/></svg>`;
-  return {title:name||"Bedingungen",icon:tIc,html:`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+weatherHTML(w)+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
+  return {title:name||"Bedingungen",icon:tIc,html:weatherHTML(w)+`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
    <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a><a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a>
    <a class="btn" href="https://www.skitourenguru.ch/" target="_blank" rel="noopener">Skitourenguru</a></div>`,
    async after(P){$("#cUpd",P).onclick=async()=>{if(!navigator.onLine)return toast("Kein Internet");await fetchConditions();refreshPanel();};bindBulletin(P);

@@ -1,6 +1,7 @@
 /* Boschor Map – Offline-Regionen (Kacheln in IndexedDB), Ortsnamen, Lawinenbulletin (SLF), Wetter (MeteoSchweiz) */
 "use strict";
-const LIM_KM2=300,LIM_TILES=20000,ZMIN_OFF=8;
+const LIM_KM2=3000,LIM_TILES=150000,WARN_TILES=30000,TPS=20,ZMIN_OFF=8;let stFree=null;
+function storeFree(){try{navigator.storage.estimate().then(e=>{stFree=e.quota?Math.max(0,e.quota-(e.usage||0))/1048576:null;});}catch(e){}}
 let regionSel=null,dl=null;
 
 /* ---------- Kacheln eines Ausschnitts ---------- */
@@ -17,7 +18,7 @@ async function regionsPanel(){const R=(await getAll("regions",await tdb())).sort
   const st={done:["erledigt","st-done"],run:["läuft","st-run"],wait:["kommt noch","st-wait"],paused:["angehalten","st-wait"],err:["unterbrochen","st-err"],names:["läuft (Namen)","st-run"]};
   let est="";try{const e=await navigator.storage.estimate();est=`Belegt insgesamt: ${MB(e.usage||0)} von ca. ${MB(e.quota||0)}`;}catch(e){}
   return {title:"Offline-Regionen",icon:`<svg><use href="#i-down"/></svg>`,html:`
-   <p class="muted">Gespeicherte swisstopo-Karten (und gewählte Ebenen) sind auch ohne Netz da. Grenzen pro Region: ${LIM_KM2} km² und ${fmtN(LIM_TILES)} Kacheln.</p>
+   <p class="muted">Gespeicherte swisstopo-Karten (und gewählte Ebenen) sind auch ohne Netz da. Grenzen pro Region: ${fmtN(LIM_KM2)} km² und ${fmtN(LIM_TILES)} Kacheln.</p>
    <button class="btn pri full" id="rNew"><svg><use href="#i-plus"/></svg>Neue Region auf der Karte wählen</button>
    <div class="card" style="margin-top:10px">${R.length?R.map(r=>{const s=st[r.state]||st.wait;const pct=r.total?Math.round((r.done||0)/r.total*100):0;
      return `<div class="q"><div class="grow"><b>${esc(r.name)}</b> <small class="${s[1]}">${s[0]}</small><br><small class="muted">${(r.bases||[]).map(k=>BASES[k].n).concat((r.ovs||[]).map(k=>OVERLAYS[k].n)).join(", ")} · bis Zoom ${r.zmax} · ${fmtN(r.done||0)} / ${fmtN(r.total||0)} Kacheln · ${MB(r.bytes||0)}${r.names?` · ${fmtN(r.names)} Namen`:""}${r.fail?` · ${r.fail} fehlten`:""}</small>
@@ -35,23 +36,26 @@ let frameEl=null,frameHandles=[];
 function showFrame(b){hideFrame();frameEl=document.createElement("div");frameEl.className="fframe";$("#map").appendChild(frameEl);const upd=()=>{if(!frameEl)return;const a=map.project(b[2],b[1]),c=map.project(b[0],b[3]);
   Object.assign(frameEl.style,{left:a.x+"px",top:a.y+"px",width:(c.x-a.x)+"px",height:(c.y-a.y)+"px"});};frameEl._u=upd;frameEl._b=b;map.on("move",upd);upd();}
 function hideFrame(){if(frameEl){map.off("move",frameEl._u);frameEl.remove();frameEl=null;}frameHandles.forEach(h=>map.removeMarker(h));frameHandles=[];}
-function startRegionSelect(){if(planState)return toast("Zuerst die Planung beenden");closePanel();const bb=map.getBounds();const dy=(bb[2]-bb[0])*0.18,dx=(bb[3]-bb[1])*0.15;
+function startRegionSelect(){if(planState)return toast("Zuerst die Planung beenden");storeFree();closePanel();const bb=map.getBounds();const dy=(bb[2]-bb[0])*0.18,dx=(bb[3]-bb[1])*0.15;
   regionSel={b:[bb[0]+dy,bb[1]+dx,bb[2]-dy,bb[3]-dx],bases:["lk"],ovs:Object.keys(viewPrefs().ov||{}).filter(k=>viewPrefs().ov[k]),zmax:17};
   if(map.z<10)toast("Tipp: zuerst näher an das Gebiet zoomen",3500);
   showFrame(regionSel.b);const b=regionSel.b;
   const mk=(i)=>{const pos=[[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]][i];const h=map.addMarker({lat:pos[0],lon:pos[1],anchor:[0,0],drag:true,z:80,html:`<div class="hdl"></div>`});h.corner=i;return h;};
   frameHandles=[0,1,2,3].map(mk);map.on("markerdrag",onHandleDrag);
-  modebar(`<b class="grow">Ecken ziehen, um den Ausschnitt zu wählen</b><button class="btn sm" id="rsX">Abbrechen</button><button class="btn sm pri" id="rsOk">Weiter</button>`);
-  $("#rsX").onclick=endRegionSelect;$("#rsOk").onclick=()=>openPanel(regionFormPanel,{half:true});openPanel(regionFormPanel,{half:true});}
+  modebar(`<span class="grow"><b>Ecken ziehen, um den Ausschnitt zu wählen</b><br><small class="muted" id="rsEst"></small></span><button class="btn sm" id="rsX">Abbrechen</button><button class="btn sm pri" id="rsOk">Weiter</button>`);
+  $("#rsX").onclick=endRegionSelect;$("#rsOk").onclick=()=>openPanel(regionFormPanel,{half:true});regionSelEst();}
+function regionSelEst(){const el=$("#rsEst");if(!el||!regionSel)return;const r={bbox:regionSel.b,bases:regionSel.bases,ovs:regionSel.ovs,zmax:regionSel.zmax};const c=regionCount(r);const a=areaKm2(r.bbox);
+  const bad=a>LIM_KM2||c.n>LIM_TILES||(stFree!=null&&c.mb>stFree*0.9);el.innerHTML=`${fmtN(a)} km² · ca. ${fmtN(c.mb)} MB · ${durTxt(c.n)}${bad?' · <span style="color:var(--rot)">zu gross</span>':""}`;}
+function durTxt(n){const m=Math.max(1,Math.round(n/TPS/60));return m<60?`ca. ${m} min`:`ca. ${(m/60).toFixed(1)} h`;}
 function onHandleDrag(e){if(!regionSel||e.marker.corner==null)return;const b=regionSel.b,i=e.marker.corner;
   if(i===0){b[2]=e.lat;b[1]=e.lon;}else if(i===1){b[2]=e.lat;b[3]=e.lon;}else if(i===2){b[0]=e.lat;b[3]=e.lon;}else{b[0]=e.lat;b[1]=e.lon;}
   if(b[0]>b[2])[b[0],b[2]]=[b[2],b[0]];if(b[1]>b[3])[b[1],b[3]]=[b[3],b[1]];
   const pos=[[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]];frameHandles.forEach((h,k)=>{if(h!==e.marker)map.moveMarker(h,pos[k][0],pos[k][1]);});frameEl._u();
-  clearTimeout(regionSel._t);regionSel._t=setTimeout(()=>{const el=$("#rfEst");if(el)el.innerHTML=regionEstHTML();},120);}
+  clearTimeout(regionSel._t);regionSel._t=setTimeout(()=>{const el=$("#rfEst");if(el)el.innerHTML=regionEstHTML();regionSelEst();},120);}
 function endRegionSelect(){map.off("markerdrag",onHandleDrag);hideFrame();regionSel=null;modebar(null);closePanel();}
 function regionEstHTML(){const r={bbox:regionSel.b,bases:regionSel.bases,ovs:regionSel.ovs,zmax:regionSel.zmax};const c=regionCount(r);const a=areaKm2(r.bbox);
-  const bad=a>LIM_KM2||c.n>LIM_TILES;regionSel.ok=!bad&&(r.bases.length+r.ovs.length)>0;
-  return `<b>${fmtN(a)} km²</b> · <b>${fmtN(c.n)}</b> Kacheln · ca. <b>${fmtN(c.mb)} MB</b>${bad?`<div class="st-err">Zu gross – Ausschnitt verkleinern oder Zoomstufe senken (max. ${LIM_KM2} km², ${fmtN(LIM_TILES)} Kacheln).</div>`:""}`;}
+  const full=stFree!=null&&c.mb>stFree*0.9;const bad=a>LIM_KM2||c.n>LIM_TILES||full;setTimeout(regionSelEst,0);regionSel.ok=!bad&&(r.bases.length+r.ovs.length)>0;
+  return `<b>${fmtN(a)} km²</b> · <b>${fmtN(c.n)}</b> Kacheln · ca. <b>${fmtN(c.mb)} MB</b><br><span class="muted">Dauer ${durTxt(c.n)} (je nach Netz)</span>${full?`<div class="st-err">Zu wenig Speicher frei auf dem Gerät (frei ca. ${fmtN(Math.round(stFree))} MB).</div>`:bad?`<div class="st-err">Zu gross – Ausschnitt verkleinern oder Zoomstufe senken (max. ${fmtN(LIM_KM2)} km², ${fmtN(LIM_TILES)} Kacheln).</div>`:c.n>WARN_TILES?`<div class="muted small" style="color:#b26a00">Grosse Region: am besten im WLAN, App dabei offen lassen. Ein unterbrochener Download lässt sich mit «Fortsetzen» dort weiterführen, wo er stehen blieb.</div>`:""}`;}
 function regionFormPanel(){if(!regionSel)return {title:"Region",html:""};const rs=regionSel;
   return {title:"Neue Offline-Region",icon:`<svg><use href="#i-down"/></svg>`,half:true,html:`
    <div class="card"><label class="f">Name</label><input class="inp" id="rfN" placeholder="z. B. Val Bever">
@@ -67,11 +71,11 @@ function regionFormPanel(){if(!regionSel)return {title:"Region",html:""};const r
        const r={id:uid(),name:$("#rfN",P).value.trim()||`Region ${fmtDate(today())}`,bbox:rs.b.map(v=>+v.toFixed(5)),bases:rs.bases,ovs:rs.ovs,zmax:rs.zmax,state:"wait",done:0,bytes:0,created:Date.now()};
        r.total=regionCount(r).n;await put("regions",r,await tdb());endRegionSelect();toast("Download gestartet");pumpQueue();openPanel(regionsPanel);};}};}
 
-/* ---------- Download (massvoll: 2 gleichzeitig, kurze Pausen, Abbruch jederzeit) ---------- */
+/* ---------- Download (massvoll: 4 gleichzeitig, kurze Pausen, Abbruch jederzeit) ---------- */
 async function resumeRegion(id){const T=await tdb();const r=await getOne("regions",id,T);if(!r)return;if(!navigator.onLine)return toast("Kein Internet");r.state="wait";await put("regions",r,T);pumpQueue();refreshPanel();}
 async function pumpQueue(){if(dl)return;const T=await tdb();const R=(await getAll("regions",T)).filter(r=>r.state==="wait").sort((a,b)=>a.created-b.created);if(!R.length){updPill();return;}
   const r=R[0];dl={id:r.id,stop:false};r.state="run";await put("regions",r,T);updPill(r);refreshRegionsPanel();
-  try{await downloadRegion(r,T);if(!dl.stop){r.state="names";await put("regions",r,T);refreshRegionsPanel();await downloadNames(r,T);}
+  try{await downloadRegion(r,T);if(!dl.stop){r.state="names";await put("regions",r,T);refreshRegionsPanel();await downloadNames(r,T);if(!dl.stop&&((r.bases||[]).includes("winter")||(r.ovs||[]).includes("ski")))await skiPrefetch(r.bbox);}
     r.state=dl.stop?"paused":"done";}catch(e){console.warn(e);r.state="err";r.errMsg=e.message;toast("Download unterbrochen: "+e.message,5000);}
   await put("regions",r,T);dl=null;refreshRegionsPanel();updPill();if(r.state==="done")toast(`«${r.name}» ist offline verfügbar`,4000);pumpQueue();}
 function refreshRegionsPanel(){if(nav.length&&nav[nav.length-1].fn===regionsPanel)refreshPanel();}
@@ -83,8 +87,8 @@ async function downloadRegion(r,T){const keys=[...regionKeys(r)];r.total=keys.le
       for(;;){try{if(!navigator.onLine)throw new Error("offline");const res=await fetch(k.u,{mode:"cors",credentials:"omit",cache:"no-store"});
           if(res.ok){const b=await res.blob();got.push({k:k.k,b,r:[r.id]});bytes+=b.size;}else fail++;break;}
         catch(e){if(++tries>=4){dl.stop=true;throw new Error(navigator.onLine?"Netzfehler":"Netz weg");}await sleep(1500*tries);}}
-      await sleep(30);}};
-    await Promise.all([worker(),worker()]);
+      await sleep(10);}};
+    await Promise.all([worker(),worker(),worker(),worker()]);
     const upd=[];for(const [k,v] of have){if(!v.r.includes(r.id)){v.r=v.r.concat(r.id);upd.push(v);}}
     await putMany("tiles",got.concat(upd),T);done+=batch.length-(todo.length);
     if(Date.now()-last>700||i+20>=keys.length){last=Date.now();r.done=done;r.bytes=b0+bytes;r.fail=fail;await put("regions",r,T);updPill(r);refreshRegionsPanel();}}
