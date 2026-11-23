@@ -1,4 +1,4 @@
-Boschor Map – v1.4 (privates Projekt)
+Boschor Map – v1.5 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,13 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.5
+- Prognose: Temperaturen und Niederschlag von der passenden Messstation (MeteoSchweiz liefert Tageswerte nur
+  für Stationen – vorher blieb die Prognose bei Postleitzahl-Punkten leer). Symbol vom nächsten Prognosepunkt.
+- «Jetzt gemessen»: Stationen, die gerade keine Temperatur oder keinen Wind melden, werden übersprungen.
+- Planen: Schwierigkeit wird aus den Wegen vorgeschlagen (OpenStreetMap: SAC-Skala T1–T6, Bike S0–S5),
+  mit km pro Stufe und «Stelle zeigen»; beim Speichern übernommen, eigene Angabe hat Vorrang.
 
 NEU IN v1.4
 - Fotos: Import auch ohne Aufnahmeort (Android entfernt ihn beim Auswählen im Browser) – Ort wählbar:

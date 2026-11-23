@@ -170,9 +170,15 @@ async function fetchWeather(onStep){const its=await (await fetch(STAC+"/items?li
   const D=[...dates].sort();const v={tx:[],tn:[],rr:[],sy:[]};for(const p of meta.p){for(const k of ["tx","tn","rr","sy"]){const m=raw[k].get(p[0])||{};v[k].push(D.map(d=>m[d]!=null?m[d]:null));}}
   wxMem={t:Date.now(),run,dates:D.map(d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`),v};await metaSet("wx",wxMem);return wxMem;}
 async function weatherAt(lat,lon,h){if(!wxMem)wxMem=await metaGet("wx",null);const meta=await getWxMeta();if(!wxMem||!meta)return null;
-  const c=meta.p.map((p,i)=>({i,p,d:distM(lat,lon,p[3],p[4])/1000})).filter(x=>x.d<20).sort((a,b)=>a.d-b.d).slice(0,12);if(!c.length)return null;
+  /* Tageswerte gibt es nur für die Messstationen (nicht für Postleitzahl-Punkte): nur Punkte mit Werten wählen */
+  const has=i=>wxMem.v.tx[i]&&wxMem.v.tx[i].some(v=>v!=null);
+  const c=meta.p.map((p,i)=>({i,p,d:distM(lat,lon,p[3],p[4])/1000})).filter(x=>x.d<40&&has(x.i)).sort((a,b)=>a.d-b.d).slice(0,12);if(!c.length)return null;
   const best=h?c.reduce((m,x)=>(x.d+Math.abs(x.p[2]-h)/150<m.d+Math.abs(m.p[2]-h)/150?x:m),c[0]):c[0];const i=best.i;const td=today();
-  return {name:best.p[1],h:best.p[2],dist:best.d,t:wxMem.t,run:wxMem.run,days:wxMem.dates.map((d,k)=>({date:d,tx:wxMem.v.tx[i][k],tn:wxMem.v.tn[i][k],rr:wxMem.v.rr[i][k],sy:wxMem.v.sy&&wxMem.v.sy[i]?wxMem.v.sy[i][k]:null})).filter(x=>x.date>=td&&x.tx!=null)};}
+  /* Symbol gibt es für alle Punkte (auch Postleitzahlen, Gipfel): vom nächsten Punkt nehmen, bei Höhenangabe auch nach Höhe */
+  const hasS=j=>wxMem.v.sy&&wxMem.v.sy[j]&&wxMem.v.sy[j].some(v=>v!=null);
+  const cs=meta.p.map((p,j)=>({j,p,d:distM(lat,lon,p[3],p[4])/1000})).filter(x=>x.d<10&&hasS(x.j)).sort((a,b)=>a.d-b.d).slice(0,10);
+  const sb=cs.length?(h?cs.reduce((m,x)=>(x.d+Math.abs(x.p[2]-h)/150<m.d+Math.abs(m.p[2]-h)/150?x:m),cs[0]):cs[0]):null;const si=sb?sb.j:i;
+  return {name:best.p[1],h:best.p[2],dist:best.d,sname:sb?sb.p[1]:best.p[1],sh:sb?sb.p[2]:best.p[2],t:wxMem.t,run:wxMem.run,days:wxMem.dates.map((d,k)=>({date:d,tx:wxMem.v.tx[i][k],tn:wxMem.v.tn[i][k],rr:wxMem.v.rr[i][k],sy:wxMem.v.sy&&wxMem.v.sy[si]?wxMem.v.sy[si][k]:null})).filter(x=>x.date>=td&&x.tx!=null)};}
 let wxMetaMem=null;async function getWxMeta(){if(!wxMetaMem)wxMetaMem=await metaGet("wxmeta",null);return wxMetaMem;}
 const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
 /* Wettersymbole von MeteoSchweiz: Nummer → Text (offizielle Liste); gezeichnet mit eigenen Symbolen */
@@ -200,7 +206,7 @@ function wxIcon(c,sz){const t=wxText(c).toLowerCase();if(!t)return "";sz=sz||34;
   return `<svg viewBox="0 0 40 40" style="width:${sz}px;height:${sz}px;stroke:none;fill:none" role="img" aria-label="${esc(wxText(c))}"><title>${esc(wxText(c))}</title>${g}</svg>`;}
 function weatherHTML(w){if(!w)return `<div class="card"><h3><svg><use href="#i-sun"/></svg>Wetter</h3><div class="muted">Noch keine Prognose gespeichert. Mit Netz «Jetzt aktualisieren» tippen.</div></div>`;
   const old=Date.now()-w.t>36*3600e3;
-  return `<div class="card"><h3><svg><use href="#i-sun"/></svg>Prognose</h3><p class="muted small">Prognosepunkt <b>${esc(w.name)}</b> (${fmtN(w.h)} m, ${fmtN(w.dist,1)} km entfernt) · gespeichert ${fmtDT(w.t)}</p>
+  return `<div class="card"><h3><svg><use href="#i-sun"/></svg>Prognose</h3><p class="muted small">${w.sname&&w.sname!==w.name?`Symbol: <b>${esc(w.sname)}</b> (${fmtN(w.sh)} m) · Temperatur und Niederschlag: <b>${esc(w.name)}</b> (${fmtN(w.h)} m, ${fmtN(w.dist,1)} km)`:`Prognosepunkt <b>${esc(w.name)}</b> (${fmtN(w.h)} m, ${fmtN(w.dist,1)} km entfernt)`} · gespeichert ${fmtDT(w.t)}</p>
    ${old?`<div class="note">Die Prognose ist älter als 36 Stunden.</div>`:""}
    <div class="wx">${w.days.map(d=>{const dt=new Date(d.date+"T12:00");const snow=d.rr>0.5&&d.tx<1.5;const ic=d.sy?wxIcon(d.sy,34):`<svg style="width:20px;height:20px;color:${d.rr>0.5?"#1e88e5":"#e0a100"}"><use href="#i-${snow?"snow":d.rr>0.5?"cloud":"sun"}"/></svg>`;
      return `<div title="${esc(wxText(d.sy))}"><b>${WD[dt.getDay()]} ${dt.getDate()}.${dt.getMonth()+1}.</b>${ic}<div>${fmtN(d.tn)}° / <b style="display:inline">${fmtN(d.tx)}°</b></div>
@@ -215,23 +221,31 @@ async function smnStations(){let m=await metaGet("smnmeta",null);if(m&&Date.now(
   if(iA<0||iLa<0||iLo<0)throw new Error("Stationsliste unbekannt");
   m={t:Date.now(),s:L.slice(1).map(l=>l.split(";").map(x=>x.replace(/^"|"$/g,""))).filter(c=>isFinite(+c[iLa])&&+c[iLa]>40).map(c=>({a:c[iA],n:iN>=0?c[iN]:c[iA],h:iH>=0?Math.round(+c[iH]):null,lat:+c[iLa],lon:+c[iLo]}))};
   await metaSet("smnmeta",m);return m;}
-function pickStations(list,lat,lon,h){const c=list.map(s=>Object.assign({d:distM(lat,lon,s.lat,s.lon)/1000},s)).filter(s=>s.d<35).sort((a,b)=>a.d-b.d);const out=c.slice(0,2);
-  if(h){const b=c.slice(0,12).reduce((m,x)=>!m||Math.abs(x.h-h)<Math.abs(m.h-h)?x:m,null);if(b&&!out.includes(b))out.push(b);}else if(c[2])out.push(c[2]);return out;}
+/* Kandidaten in Reihenfolge: zwei nächste, dann die höhenmässig passendste, dann weitere nach Nähe (für Ersatz, falls eine Station gerade nichts meldet) */
+function pickStations(list,lat,lon,h){const c=list.map(s=>Object.assign({d:distM(lat,lon,s.lat,s.lon)/1000},s)).filter(s=>s.d<40).sort((a,b)=>a.d-b.d);const out=c.slice(0,2);
+  if(h){const b=c.slice(0,12).reduce((m,x)=>!m||Math.abs(x.h-h)<Math.abs(m.h-h)?x:m,null);if(b&&!out.includes(b))out.push(b);}
+  for(const x of c.slice(0,8))if(!out.includes(x))out.push(x);return out.slice(0,7);}
+const usable=v=>v&&(v.ta!=null||v.ff!=null);
 async function smnNow(abbr){const a=abbr.toLowerCase();let href=`${SMN}/${a}/ogd-smn_${a}_t_now.csv`;let r=await fetch(href,{cache:"no-store"});
   if(!r.ok){const it=await (await fetch(`https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-smn/items/${a}`,{cache:"no-store"})).json();const k=Object.keys(it.assets||{}).find(x=>/_t_now\.csv$/.test(x));if(!k)throw new Error("keine aktuellen Werte");href=it.assets[k].href;r=await fetch(href,{cache:"no-store"});}
   const tx=await r.text();const L=tx.split(/\r?\n/).filter(Boolean);const hd=L[0].split(";");const rows=L.slice(1).map(l=>l.split(";"));const col=k=>hd.indexOf(k);
   const num=(row,k)=>{const i=col(k);if(i<0)return null;const v=parseFloat(row[i]);return isFinite(v)?v:null;};
-  const full=rows.filter(rw=>num(rw,"tre200s0")!=null);const last=full[full.length-1];if(!last)throw new Error("keine aktuellen Werte");
+  const full=rows.filter(rw=>num(rw,"tre200s0")!=null||num(rw,"fu3010z0")!=null);const last=full[full.length-1];if(!last)throw new Error("keine aktuellen Werte");
   const ts=(last[col("reference_timestamp")]||"").match(/(\d+)\.(\d+)\.(\d+) (\d+):(\d+)/);const t=ts?Date.UTC(+ts[3],+ts[2]-1,+ts[1],+ts[4],+ts[5]):Date.now();
   const lastN=k=>{for(let i=rows.length-1;i>=0;i--){const v=num(rows[i],k);if(v!=null)return v;}return null;};
   const li=rows.indexOf(last);let rr=0,any=false;for(let i=Math.max(0,li-5);i<=li;i++){const v=num(rows[i],"rre150z0");if(v!=null){rr+=v;any=true;}}
   return {t,ta:num(last,"tre200s0"),rh:num(last,"ure200s0"),ff:num(last,"fu3010z0"),fx:num(last,"fu3010z1"),dd:num(last,"dkl010z0"),rr:any?Math.round(rr*10)/10:null,hs:lastN("htoauts0"),sun:num(last,"sre000z0")};}
 async function nowCached(){return (await metaGet("smnnow",null))||{};}
-async function fetchNowFor(sts){const cache=await nowCached();await Promise.all(sts.map(async s=>{try{cache[s.a]=Object.assign(await smnNow(s.a),{fetched:Date.now()});}catch(e){}}));await metaSet("smnnow",cache);return cache;}
+async function fetchNowFor(sts){const cache=await nowCached();let ok=0;
+  /* der Reihe nach, bis drei Stationen brauchbare Werte haben (spart Abfragen) */
+  for(let i=0;i<sts.length&&ok<3;i+=3){await Promise.all(sts.slice(i,i+3).map(async s=>{try{cache[s.a]=Object.assign(await smnNow(s.a),{fetched:Date.now()});}catch(e){cache[s.a]={none:1,fetched:Date.now()};}}));
+    ok=sts.slice(0,i+3).filter(s=>usable(cache[s.a])).length;}
+  await metaSet("smnnow",cache);return cache;}
 const DIRS=["N","NO","O","SO","S","SW","W","NW"];const dirTxt=d=>d==null?"":DIRS[Math.round(d/45)%8];
 function nowHTML(sts,cache,loading){if(!sts)return `<div class="card"><h3><svg><use href="#i-gauge"/></svg>Jetzt gemessen</h3><div class="muted">${navigator.onLine?"Stationen werden geladen …":"Stationsliste noch nicht gespeichert (einmal mit Netz öffnen)."}</div></div>`;
   if(!sts.length)return `<div class="card"><h3><svg><use href="#i-gauge"/></svg>Jetzt gemessen</h3><div class="muted">Keine Messstation im Umkreis von 35 km.</div></div>`;
-  return `<div class="card"><h3><svg><use href="#i-gauge"/></svg>Jetzt gemessen${loading?` <small class="muted">· wird aktualisiert …</small>`:""}</h3>${sts.map(s=>{const v=cache[s.a];const age=v?Math.round((Date.now()-v.t)/60000):null;
+  const withV=sts.filter(s=>usable(cache[s.a]));const show=(withV.length?withV:sts).slice(0,3);
+  return `<div class="card"><h3><svg><use href="#i-gauge"/></svg>Jetzt gemessen${loading?` <small class="muted">· wird aktualisiert …</small>`:""}</h3>${show.map(s=>{const v=usable(cache[s.a])?cache[s.a]:null;const age=v?Math.round((Date.now()-v.t)/60000):null;
     return `<div class="q"><div class="grow"><b>${esc(s.n)}</b> <small class="muted">${s.h!=null?fmtN(s.h)+" m · ":""}${fmtN(s.d,1)} km</small><br>
      ${v?`<span style="font-size:17px;font-weight:700;color:var(--nacht)">${v.ta!=null?fmtN(v.ta,1)+" °C":"–"}</span>
       <small>${v.ff!=null?` · Wind ${fmtN(v.ff)} km/h ${dirTxt(v.dd)}${v.fx!=null?`, Böen ${fmtN(v.fx)}`:""}`:""}${v.rr!=null?` · ${fmtN(v.rr,1)} mm/h`:""}${v.hs!=null?` · Schnee ${fmtN(v.hs)} cm`:""}${v.rh!=null?` · ${fmtN(v.rh)} % Feuchte`:""}</small>

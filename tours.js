@@ -96,6 +96,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
    <div class="kv"><div><b>${fmtKm(t.dist)}</b><small>Distanz</small></div><div><b>${fmtN(t.up)} m</b><small>Aufstieg</small></div><div><b>${fmtN(t.down)} m</b><small>Abstieg</small></div>
     ${idea?`<div><b>≈ ${fmtDur(est)}</b><small>mit deinem Tempo</small></div>`:`<div><b>${fmtDur(t.moving)}</b><small>in Bewegung${t.total?` · gesamt ${fmtDur(t.total)}`:""}</small></div>`}
     ${t.emax!=null?`<div><b>${fmtN(t.emax)} m</b><small>höchster Punkt</small></div>`:""}${!idea&&t.moving?`<div><b>${fmtDur(est)}</b><small>Schätzung vorher</small></div>`:""}</div>
+   ${t.diffAuto?diffHTML(t.diffAuto).replace("Schwierigkeit (Vorschlag)","Schwierigkeit laut Wegen"):""}
    ${prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="tProf"></canvas><div class="muted small" id="tProfI">Antippen oder darüberfahren: Stelle auf der Karte</div></div>`:""}
    ${!idea&&(t.removed||t.pauses)?`<p class="muted small">Bereinigt: ${t.pauses?t.pauses+" Pausen zusammengefasst":""}${t.removed&&t.pauses?", ":""}${t.removed?t.removed+" Ausreisser entfernt":""}.</p>`:""}
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
@@ -110,7 +111,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
     ${winter?`<a class="btn" href="https://www.skitourenguru.ch/" target="_blank" rel="noopener">Skitourenguru</a>`:""}
     ${hasRaw?`<button class="btn" id="tRaw">Original-Track</button>`:""}
     <button class="btn red" id="tDel"><svg><use href="#i-trash"/></svg>Löschen</button></div>`,
-   async after(P){P.addEventListener("stars",async e=>{const k=e.target.dataset.stars;t.rate=Object.assign({},t.rate||{});t.rate[k]=e.detail;await saveTour(t);});
+   async after(P){bindDiff(P);P.addEventListener("stars",async e=>{const k=e.target.dataset.stars;t.rate=Object.assign({},t.rate||{});t.rate[k]=e.detail;await saveTour(t);});
      if(prof.length>1){const top=prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]);const b=winter?await bulletinAt(top.lat,top.lon):null;const band=b&&b.critLow!=null?[b.critLow,b.critHigh]:null;
        drawProfile($("#tProf",P),prof,{band,info:$("#tProfI",P)});}
      $("#tEd",P).onclick=()=>openPanel(()=>editTourPanel(t));
@@ -133,7 +134,7 @@ function editTourPanel(t){const sc=SCALES[t.art]||[];return {title:"Tour bearbei
    <label class="f">Schwierigkeit</label><select class="inp" id="eF"><option value="">–</option>${Object.values(SCALES).flat().filter((v,i,a)=>a.indexOf(v)===i).map(v=>`<option${v===t.diff?" selected":""}>${v}</option>`).join("")}</select>
    <label class="f">Notiz</label><textarea class="inp" id="eT">${esc(t.note||"")}</textarea></div><button class="btn pri full" id="eOk"><svg><use href="#i-check"/></svg>Speichern</button>`,
    after(P){const fill=()=>{const s=SCALES[$("#eA",P).value]||[];const cur=$("#eF",P).value;$("#eF",P).innerHTML=`<option value="">–</option>`+s.map(v=>`<option${v===cur?" selected":""}>${v}</option>`).join("");};fill();$("#eA",P).onchange=fill;
-     $("#eOk",P).onclick=async()=>{t.name=$("#eN",P).value.trim()||t.name;t.art=$("#eA",P).value;t.status=$("#eS",P).value;t.date=$("#eD",P).value||t.date;t.diff=$("#eF",P).value;t.note=$("#eT",P).value.trim();
+     $("#eOk",P).onclick=async()=>{t.name=$("#eN",P).value.trim()||t.name;t.art=$("#eA",P).value;t.status=$("#eS",P).value;t.date=$("#eD",P).value||t.date;if($("#eF",P).value!==t.diff)t.diffWasAuto=false;t.diff=$("#eF",P).value;t.note=$("#eT",P).value.trim();
        await saveTour(t);panelBack();};}};}
 const fileSafe=s=>String(s||"tour").replace(/[^\wäöüÄÖÜéèàç\- ]+/g,"").trim().replace(/\s+/g,"_").slice(0,60)||"tour";
 function download(name,data,type){const b=data instanceof Blob?data:new Blob([data],{type:type||"application/octet-stream"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000);}
@@ -191,7 +192,22 @@ async function routeSeg(a,b,mode,art){const prof=ARTS[art].prof;if(mode==="luft"
   if(!navigator.onLine)throw new Error("offline");const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),30000);
   try{const r=await fetch(`https://brouter.de/brouter?lonlats=${a.lon.toFixed(6)},${a.lat.toFixed(6)}|${b.lon.toFixed(6)},${b.lat.toFixed(6)}&profile=${prof}&alternativeidx=0&format=geojson`,{signal:ctl.signal});
     const tx=await r.text();if(!r.ok)throw new Error(tx.slice(0,120));const g=JSON.parse(tx);const c=g.features[0].geometry.coordinates;const L=c.map(p=>[p[1],p[0],p[2]!=null?p[2]:null]);
-    L[0]=[a.lat,a.lon,L[0][2]];L[L.length-1]=[b.lat,b.lon,L[L.length-1][2]];routeCache.set(k,L);return L;}finally{clearTimeout(tm);}}
+    L[0]=[a.lat,a.lon,L[0][2]];L[L.length-1]=[b.lat,b.lon,L[L.length-1][2]];L._tags=wayTags(g.features[0].properties);routeCache.set(k,L);return L;}finally{clearTimeout(tm);}}
+/* Schwierigkeit aus OpenStreetMap (über BRouter): sac_scale → T1–T6, mtb:scale → S0–S5 */
+const SAC={hiking:"T1",mountain_hiking:"T2",demanding_mountain_hiking:"T3",alpine_hiking:"T4",demanding_alpine_hiking:"T5",difficult_alpine_hiking:"T6"};
+function wayTags(pr){const m=pr&&pr.messages;if(!m||m.length<2)return null;const h=m[0];const iLo=h.indexOf("Longitude"),iLa=h.indexOf("Latitude"),iD=h.indexOf("Distance"),iW=h.indexOf("WayTags");if(iW<0||iD<0)return null;
+  return m.slice(1).map(r=>{const w=String(r[iW]||"");const s=(w.match(/(?:^| )sac_scale=([\w]+)/)||[])[1];const mt=(w.match(/(?:^| )mtb:scale=(\d)/)||[])[1];
+    return {lat:+r[iLa]/1e6,lon:+r[iLo]/1e6,d:+r[iD]||0,sac:SAC[s]||null,mtb:mt!=null?"S"+Math.min(5,+mt):null};});}
+/* Auswertung einer Route: km pro Stufe, schwierigste Stufe und Stelle, Abdeckung */
+function routeDifficulty(segs,art){const bike=/bike|gravel/.test(art);const key=bike?"mtb":"sac";const order=bike?["S0","S1","S2","S3","S4","S5"]:["T1","T2","T3","T4","T5","T6"];
+  const km={};let tot=0,cov=0,top=null;
+  for(const L of segs){if(!L)continue;if(!L._tags){for(let i=1;i<L.length;i++)tot+=distM(L[i-1][0],L[i-1][1],L[i][0],L[i][1]);continue;}
+    for(const t of L._tags){tot+=t.d;const v=t[key];if(!v)continue;cov+=t.d;km[v]=(km[v]||0)+t.d;if(!top||order.indexOf(v)>order.indexOf(top.v))top={v,lat:t.lat,lon:t.lon};}}
+  if(!top)return null;return {lvl:top.v,lat:top.lat,lon:top.lon,km:order.filter(o=>km[o]).map(o=>[o,Math.round(km[o])]),cov:tot?Math.round(cov/tot*100):0,scale:bike?"MTB":"SAC"};}
+function diffHTML(d){if(!d)return "";return `<div class="card"><h3>Schwierigkeit (Vorschlag)</h3><div class="row"><span class="tag" style="font-size:15px">${esc(d.lvl)}</span><span class="grow muted small">schwierigster Abschnitt laut OpenStreetMap (${d.scale}-Skala) · Angaben für ${d.cov} % der Strecke</span>
+   ${d.lat!=null?`<button class="btn sm" data-diffshow="${d.lat},${d.lon}">Stelle zeigen</button>`:""}</div>
+   <div class="small" style="margin-top:6px">${d.km.map(([k,m])=>`${k}: ${fmtN(m/1000,1)} km`).join(" · ")}</div></div>`;}
+function bindDiff(P){$$("[data-diffshow]",P).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.diffshow.split(",").map(Number);setTemp(la,lo);map.flyTo(la,lo,Math.max(map.z,15));});}
 async function planRoute(){const ps=planState;if(!ps)return;ps.busy++;planMarkers();map.render();
   try{const n=ps.wps.length;const segs=[];let fail=0;
     for(let i=1;i<n;i++){const a=ps.wps[i-1],b=ps.wps[i];const old=ps.segs[i-1];
@@ -221,10 +237,11 @@ function planPanel(){const ps=planState;if(!ps)return {title:"Planen",html:`<div
    ${ps.wps.length<2?`<div class="note">Punkte der Reihe nach auf der Karte antippen. Die Linie folgt ${ARTS[ps.art].prof?"den Wegen (Umschalten auf «Luftlinie» für Abschnitte abseits der Wege)":"als Luftlinie (Skitouren und Winterhochtouren verlaufen meist abseits der Wege)"}.<br>Punkte ziehen = verschieben · lange drücken = entfernen · auf die Linie tippen = Zwischenpunkt.</div>`:""}
    <div class="kv"><div><b>${fmtKm(ps.dist||0)}</b><small>Distanz</small></div><div><b>${ps.up!=null?fmtN(ps.up)+" m":"…"}</b><small>Aufstieg</small></div><div><b>${ps.down!=null?fmtN(ps.down)+" m":"…"}</b><small>Abstieg</small></div><div><b>${est!=null?fmtDur(est):"…"}</b><small>Zeit (dein Tempo)</small></div></div>
    ${ps.prof&&ps.prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="plProf"></canvas><div class="muted small" id="plProfI">Höhen: swissALTI3D</div></div>`:ps.wps.length>1?`<p class="muted small">${navigator.onLine?"Höhenprofil wird geladen …":"Höhenprofil nur online (swisstopo)"}</p>`:""}
+   ${diffHTML(routeDifficulty(ps.segs,ps.art))}
    <div class="card"><div class="crit"><span>Tempo ${(fac*100).toFixed(0)} %<br><small class="muted">${fmtN(t.vf,1)} km/h · ↑${fmtN(t.vu)} · ↓${fmtN(t.vd)} Hm/h</small></span><input type="range" id="plF" min="60" max="150" step="5" value="${Math.round(fac*100)}" style="flex:1;max-width:180px"></div></div>
    <div class="btns"><button class="btn pri" id="plS"${ps.wps.length<2?" disabled":""}><svg><use href="#i-check"/></svg>Als Idee speichern</button><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
     <button class="btn" id="plRev"${ps.wps.length<2?" disabled":""}>Umkehren</button><button class="btn" id="plZ"${ps.wps.length<2?" disabled":""}>Zurück zum Start</button></div>`,
-   after(P){if(ps.prof&&ps.prof.length>1)drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P)});
+   after(P){if(ps.prof&&ps.prof.length>1)drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P)});bindDiff(P);
      $("#plF",P).onchange=async e=>{S.settings.tempoFactor=Object.assign({},S.settings.tempoFactor||{});S.settings.tempoFactor[ps.art]=+e.target.value/100;await saveSettings();refreshPanel();};
      $("#plRev",P).onclick=async()=>{snap();ps.wps.reverse();ps.segs=[];await planRoute();refreshPanel();};
      $("#plZ",P).onclick=async()=>{snap();const a=ps.wps[0];ps.wps.push({lat:a.lat,lon:a.lon,mode:ps.mode});await planRoute();refreshPanel();};
@@ -239,6 +256,7 @@ async function savePlan(){const ps=planState;if(!ps||ps.wps.length<2)return;if(!
   const t=Object.assign(old||{id:uid(),status:"idee",rate:{},note:"",diff:""},{name:name.trim()||def,art:ps.art,src:"plan",dist:Math.round(ps.dist),up:ps.up||0,down:ps.down||0,
     emin:hs.length?Math.round(Math.min(...hs)):null,emax:hs.length?Math.round(Math.max(...hs)):null,prof:ps.prof?ps.prof.filter((p,i)=>i%2===0||i===ps.prof.length-1).map(p=>({d:Math.round(p.d),h:Math.round(p.h),lat:r5(p.lat),lon:r5(p.lon)})):null,
     plan:{art:ps.art,wps:ps.wps.map(w=>({lat:r5(w.lat),lon:r5(w.lon),mode:w.mode}))}});
+  const dA=routeDifficulty(ps.segs,ps.art);t.diffAuto=dA?{lvl:dA.lvl,lat:r5(dA.lat),lon:r5(dA.lon),km:dA.km,cov:dA.cov,scale:dA.scale}:null;if(dA&&(!t.diff||t.diffWasAuto)){t.diff=dA.lvl;t.diffWasAuto=true;}
   await saveTour(t,line);const id=t.id;endPlan();toast("Idee gespeichert");showTour(id);}
 function planName(){const ps=planState;const near=(w)=>{let b=null;for(const p of S.points){if(p.del)continue;const d=distM(w.lat,w.lon,p.lat,p.lon);if(d<300&&(!b||d<b.d))b={p,d};}return b&&b.p.name;};
   const a=near(ps.wps[0]),top=ps.prof?ps.prof.reduce((m,p)=>p.h>m.h?p:m,ps.prof[0]):null;const z=top?near(top):near(ps.wps[ps.wps.length-1]);
