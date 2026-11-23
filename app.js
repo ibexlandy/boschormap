@@ -29,15 +29,18 @@ function closePanel(fromPop){nav.length=0;const sh=$("#sheet");sh.classList.remo
 window.addEventListener("popstate",()=>{if($(".pbig")){closeGallery();try{history.pushState({bm:1},"");}catch(e){}return;}
   if(!nav.length)return;if(nav.length>1){nav.pop();renderPanel();try{history.pushState({bm:1},"");}catch(e){}}else closePanel(true);});
 async function renderPanel(){const top=nav[nav.length-1];if(!top)return;const P=$("#panel");let r;try{r=await top.fn();}catch(e){console.error(e);r={title:"Fehler",html:`<div class="card">${esc(e.message)}</div>`};}
-  if(nav[nav.length-1]!==top)return;$("#sheet").classList.toggle("half",!!(top.o.half||r.half));
-  P.innerHTML=`<div class="ph">${nav.length>1?`<button class="ib" data-hdr="back" aria-label="Zurück"><svg><use href="#i-back"/></svg></button>`:""}<h2>${r.icon||""}<span>${esc(r.title||"")}</span></h2>${r.tools||""}<button class="ib" data-hdr="close" aria-label="Schliessen"><svg><use href="#i-close"/></svg></button></div><div class="pb">${r.html||""}</div>`;
-  P.querySelector('[data-hdr="close"]').onclick=()=>closePanel();const bb=P.querySelector('[data-hdr="back"]');if(bb)bb.onclick=panelBack;
+  if(nav[nav.length-1]!==top)return;const half=!!(top.o.half||r.half)&&ls("sheetFull")!=="1";$("#sheet").classList.toggle("half",half);$("#sheet").classList.toggle("canhalf",!!(top.o.half||r.half));
+  P.innerHTML=`${top.o.half||r.half?`<button class="grab" aria-label="${half?"Grösser":"Kleiner"}"><i></i></button>`:""}<div class="ph">${nav.length>1?`<button class="ib" data-hdr="back" aria-label="Zurück"><svg><use href="#i-back"/></svg></button>`:""}<h2>${r.icon||""}<span>${esc(r.title||"")}</span></h2>${r.tools||""}<button class="ib" data-hdr="close" aria-label="Schliessen"><svg><use href="#i-close"/></svg></button></div><div class="pb">${r.html||""}</div>`;
+  P.querySelector('[data-hdr="close"]').onclick=()=>closePanel();const gb=P.querySelector(".grab");
+  if(gb){const tog=()=>{const full=$("#sheet").classList.toggle("half")===false;ls("sheetFull",full?"1":"0");gb.setAttribute("aria-label",full?"Kleiner":"Grösser");};gb.onclick=tog;
+    let y0=null;gb.addEventListener("pointerdown",e=>{y0=e.clientY;});gb.addEventListener("pointerup",e=>{if(y0==null)return;const dy=e.clientY-y0;y0=null;const isHalf=$("#sheet").classList.contains("half");
+      if(dy<-25&&isHalf)tog();else if(dy>25&&!isHalf)tog();});}const bb=P.querySelector('[data-hdr="back"]');if(bb)bb.onclick=panelBack;
   if(!top.o.keepScroll)P.scrollTop=0;bindStars(P);if(r.after)try{await r.after(P);}catch(e){console.error(e);toast(e.message);}}
 function refreshPanel(){if(nav.length){nav[nav.length-1].o.keepScroll=true;renderPanel().then(()=>{if(nav.length)nav[nav.length-1].o.keepScroll=false;});}}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$(".pbig")&&nav.length&&!e.target.closest("input,textarea"))panelBack();});
 
 /* Höhe, die ein halbes Panel auf dem Handy über der Karte belegt */
-const sheetPad=()=>innerWidth<900?Math.round(($("#mapWrap").clientHeight)*0.48):0;
+const sheetPad=()=>innerWidth<900?Math.round(($("#mapWrap").clientHeight)*(ls("sheetFull")==="1"?0.2:0.62)):0;
 const sheetPadR=()=>innerWidth>=900?460:0;
 /* ---------- Sterne ---------- */
 function starsHTML(v,key,ro){v=+v||0;let s=`<span class="stars${ro?" ro":""}"${key?` data-stars="${key}"`:""}>`;for(let i=1;i<=5;i++)s+=ro?`<svg class="${i<=v?"on":""}" style="color:${i<=v?"#e0a100":"#c9ced3"}"><use href="#i-star"/></svg>`:`<button type="button" class="${i<=v?"on":""}" data-v="${i}" aria-label="${i} Sterne"><svg><use href="#i-star"/></svg></button>`;return s+"</span>";}
@@ -104,10 +107,30 @@ function onMarkerClick(e){const mk=e.marker;if(planState&&mk.pid){const p=S.poin
 function onLongPress(e){if(planState||placing||regionSel)return;const lat=e.lat,lon=e.lon;setTemp(lat,lon);
   openPanel(async()=>({title:"Ort auf der Karte",half:true,html:`<div class="card"><div class="muted">${lat.toFixed(5)}, ${lon.toFixed(5)} · <span id="lpH">Höhe …</span></div></div>
     <div class="btns"><button class="btn pri" id="lpP"><svg><use href="#i-pin"/></svg>Punkt hier setzen</button><button class="btn" id="lpR"><svg><use href="#i-flag"/></svg>Tour von hier planen</button>
-    <button class="btn" id="lpW"><svg><use href="#i-sun"/></svg>Wetter & Bulletin</button></div>`,
-    async after(P){$("#lpP",P).onclick=()=>{clearTemp();newPoint(lat,lon);};$("#lpR",P).onclick=()=>{clearTemp();closePanel();startPlan({start:[lat,lon]});};
+    <button class="btn" id="lpW"><svg><use href="#i-sun"/></svg>Wetter & Bulletin</button></div>
+    <div class="card" style="margin-top:10px"><h3>Auf der Karte</h3><div id="lpN" class="muted">Namen werden gesucht …</div></div>`,
+    async after(P){$("#lpP",P).onclick=()=>{clearTemp();newPoint(lat,lon);};
+      namesAt(lat,lon,e.x,e.y).then(L=>{const el=$("#lpN",P);if(!el||!P.contains(el))return;
+        if(!L.length){el.innerHTML=navigator.onLine?"Kein Name in der Nähe dieser Stelle.":"Ohne Netz nur in gespeicherten Offline-Regionen.";return;}
+        el.innerHTML=L.map((n,i)=>{const own=S.points.find(p=>!p.del&&distM(p.lat,p.lon,n.lat,n.lon)<60);
+          return `<button class="li" data-nm="${i}">${catIc(n.cat)}<span class="t"><b>${esc(n.name)}</b><small>${esc(kindTxt(n.kind))}${own?" · schon erfasst":` · als ${CATS[n.cat].n} übernehmen`}</small></span></button>`;}).join("");
+        $$("[data-nm]",el).forEach(b=>b.onclick=()=>{const n=L[+b.dataset.nm];const own=S.points.find(p=>!p.del&&distM(p.lat,p.lon,n.lat,n.lon)<60);clearTemp();
+          if(own)return showPoint(own.id);nav.pop();newPoint(n.lat,n.lon,{name:n.name,cat:n.cat});});});$("#lpR",P).onclick=()=>{clearTemp();closePanel();startPlan({start:[lat,lon]});};
       $("#lpW",P).onclick=()=>openPanel(()=>conditionsPanel(lat,lon,null,"Ort auf der Karte"));
       const h=await heightAt(lat,lon);const el=$("#lpH",P);if(el)el.textContent=h?fmtN(h)+" m ü. M.":"Höhe nur online";}}));}
+const kindTxt=k=>String(k||"").replace(/ue/g,"ü").replace(/oe/g,"ö").replace(/ae/g,"ä").replace(/Ue/g,"Ü");
+/* Namen (swissNAMES3D) an einer Stelle der Karte: online bei swisstopo, offline aus den gespeicherten Regionen */
+function nameCat(kind,name){const k=(kind+" "+name).toLowerCase();return /h(ü|ue)tte|biwak|cabane|capanna|unterkunft/.test(k)?"huette":/gipfel|hügel|huegel|kuppe|horn\b|piz\b/.test(k)?"gipfel":/pass\b|passo|col\b/.test(kind.toLowerCase())?"pass":/\bsee\b|lej\b|lac\b|lago\b/.test(k)||/see$/i.test(kind)?"see":"ort";}
+async function namesAt(lat,lon,x,y){const tolPx=28;const mpp=40075016*Math.cos(lat*RAD)/map.S;const rad=Math.max(25,tolPx*mpp);const out=[];
+  if(navigator.onLine){try{const [E,N]=toLV95(lat,lon);const a=map.unproject(0,map.h),b=map.unproject(map.w,0);const [E0,N0]=toLV95(a.lat,a.lon),[E1,N1]=toLV95(b.lat,b.lon);
+      const ext=[E0,N0,E1,N1].map(v=>Math.round(v)).join(",");
+      const u=`https://api3.geo.admin.ch/rest/services/api/MapServer/identify?geometryType=esriGeometryPoint&geometry=${E.toFixed(1)},${N.toFixed(1)}&imageDisplay=${Math.round(map.w)},${Math.round(map.h)},96&mapExtent=${ext}&tolerance=${tolPx}&layers=all:ch.swisstopo.swissnames3d&sr=2056&returnGeometry=true&geometryFormat=geojson&limit=12&lang=de`;
+      const r=await fetch(u);if(r.ok){const j=await r.json();for(const f of j.results||[]){const at=f.attributes||f.properties||{};if(!at.name)continue;let ll=null;const g=f.geometry;
+        if(g&&g.type==="Point")ll=fromLV95(g.coordinates[0],g.coordinates[1]);else if(g&&g.type==="MultiPoint")ll=fromLV95(g.coordinates[0][0],g.coordinates[0][1]);else if(f.bbox)ll=fromLV95((f.bbox[0]+f.bbox[2])/2,(f.bbox[1]+f.bbox[3])/2);if(!ll)continue;
+        out.push({name:at.name,kind:at.objektart||"",lat:ll[0],lon:ll[1],area:!!(g&&/Polygon|Line/.test(g.type))});}}}catch(e){}}
+  if(!out.length){const L=await searchOfflineNames("");for(const n of (namesCache||[]))if(distM(lat,lon,n.lat,n.lon)<rad*1.5)out.push({name:n.name,kind:n.kind,lat:n.lat,lon:n.lon});}
+  const seen=new Set();return out.map(n=>Object.assign(n,{cat:nameCat(n.kind,n.name),d:distM(lat,lon,n.lat,n.lon)})).filter(n=>{const k=n.name+"|"+n.kind;if(seen.has(k))return false;seen.add(k);return true;})
+    .sort((a,b)=>(a.area-b.area)||a.d-b.d).slice(0,6);}
 function setTemp(lat,lon){clearTemp();tempMk=map.addMarker({lat,lon,cls:"tmp",anchor:[13,26],html:`<svg><use href="#i-pin"/></svg>`,z:50});}
 function clearTemp(){if(tempMk){map.removeMarker(tempMk);tempMk=null;}}
 
@@ -309,7 +332,8 @@ function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",h
 /* ---------- Bedingungen (Bulletin + Wetter) für einen Ort ---------- */
 async function conditionsPanel(lat,lon,h,name){const b=await bulletinAt(lat,lon);const w=await weatherAt(lat,lon,h);
   let st=null;try{const m=await smnStations();if(m)st=pickStations(m.s,lat,lon,h);}catch(e){}const nc=await nowCached();
-  return {title:name||"Bedingungen",icon:`<svg><use href="#i-sun"/></svg>`,html:`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+weatherHTML(w)+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
+  const td=w&&w.days.find(d=>d.date===today());const tIc=td&&td.sy?wxIcon(td.sy,30):`<svg><use href="#i-sun"/></svg>`;
+  return {title:name||"Bedingungen",icon:tIc,html:`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+weatherHTML(w)+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
    <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a><a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a>
    <a class="btn" href="https://www.skitourenguru.ch/" target="_blank" rel="noopener">Skitourenguru</a></div>`,
    async after(P){$("#cUpd",P).onclick=async()=>{if(!navigator.onLine)return toast("Kein Internet");await fetchConditions();refreshPanel();};bindBulletin(P);
