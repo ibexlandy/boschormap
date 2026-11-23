@@ -1,10 +1,10 @@
 /* Boschor Map – Service-Worker (Scope /boschormap/). Eigene Cache-Namen «boschormap-…»;
    es werden ausschliesslich eigene Caches gelöscht, nie die von IbexMap auf derselben Herkunft. */
-const V="1.6",APP="boschormap-app-v"+V,VIEW="boschormap-view",MAXVIEW=4000;
+const V="1.7",APP="boschormap-app-v"+V,VIEW="boschormap-view",SHARE="boschormap-share",MAXVIEW=4000;
 const SHELL=["./","index.html","app.css","core.js","map.js","gpx.js","app.js","tours.js","offline.js","sync.js","admin.js",
   "manifest.webmanifest","icon-192.png","icon-512.png","icon-maskable-512.png","favicon.png","apple-touch-icon.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(APP).then(c=>Promise.all(SHELL.map(u=>fetch(u,{cache:"no-store"}).then(r=>{if(r.ok)return c.put(new URL(u,self.registration.scope).href,r);}).catch(()=>{})))).then(()=>self.skipWaiting()));});
-self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n.startsWith("boschormap-")&&n!==APP&&n!==VIEW).map(n=>caches.delete(n)))).then(()=>self.clients.claim()));});
+self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n.startsWith("boschormap-")&&n!==APP&&n!==VIEW&&n!==SHARE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()));});
 /* Offline-Kacheln liegen in IndexedDB «boschormap-tiles» (sicher vor dem Aufräumen anderer Apps) */
 let tdbP=null;
 function tdb(){if(!tdbP)tdbP=new Promise((res,rej)=>{const r=indexedDB.open("boschormap-tiles",1);r.onupgradeneeded=()=>{const d=r.result;
@@ -17,7 +17,16 @@ async function tile(req,u){const m=u.pathname.match(/^\/1\.0\.0\/([^/]+)\/defaul
   const c=await caches.open(VIEW);const hit=await c.match(req.url);if(hit)return hit;
   try{const r=await fetch(req.url,{mode:"cors",credentials:"omit"});if(r.ok){c.put(req.url,r.clone());trim();}return r;}catch(e){return Response.error();}}
 const appHit=async u=>{try{return await (await caches.open(APP)).match(u);}catch(e){return undefined;}};
-self.addEventListener("fetch",e=>{const req=e.request;if(req.method!=="GET")return;const u=new URL(req.url);
+/* «Teilen an Boschor Map» (Android): Dateien zwischenspeichern, dann die App öffnen */
+async function shareIn(req){try{const fd=await req.formData();const c=await caches.open(SHARE);let n=0;
+    for(const f of fd.getAll("files")){if(!f||typeof f==="string"||!f.size)continue;n++;
+      await c.put(new URL("./share/"+Date.now()+"-"+n,self.registration.scope).href,new Response(f,{headers:{"Content-Type":f.type||"application/octet-stream","x-name":encodeURIComponent(f.name||"datei"),"x-mod":String(f.lastModified||Date.now())}}));}
+    const t=[fd.get("title"),fd.get("text"),fd.get("url")].filter(x=>x&&typeof x==="string").join(" ");
+    if(!n&&t)await c.put(new URL("./share/text-"+Date.now(),self.registration.scope).href,new Response(t,{headers:{"Content-Type":"text/plain","x-name":"text"}}));}catch(err){}
+  return Response.redirect(new URL("./?share=1",self.registration.scope).href,303);}
+self.addEventListener("fetch",e=>{const req=e.request;
+  if(req.method==="POST"&&new URL(req.url).pathname.endsWith("/share-target")){e.respondWith(shareIn(req));return;}
+  if(req.method!=="GET")return;const u=new URL(req.url);
   if(u.hostname==="wmts.geo.admin.ch"){if(req.cache==="no-store")return;e.respondWith(tile(req,u));return;}
   if(u.origin!==location.origin||!u.href.startsWith(self.registration.scope))return;
   /* App-Dateien: sofort aus dem Speicher, im Hintergrund frisch holen (neue Versionen kommen über ein neues sw.js) */

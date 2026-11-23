@@ -1,6 +1,6 @@
 /* Boschor Map – Grundlagen: Hilfsfunktionen, Speicher (IndexedDB), Koordinaten, Konstanten */
 "use strict";
-const APP_VERSION="1.6";
+const APP_VERSION="1.7";
 const LSP="bm_";            /* eigenes localStorage-Präfix – getrennt von IbexMap auf derselben Herkunft */
 const DBN="boschormap",TDBN="boschormap-tiles";
 
@@ -81,8 +81,8 @@ const layerUrl=(id,f)=>WMTS.replace("{L}",id).replace("{F}",f||"png");
 
 /* ---------- Kategorien und Tourarten ---------- */
 const CATS={
-  gipfel:{n:"Gipfel",c:"#7a4b2a"},huette:{n:"Hütte",c:"#b5452a"},pass:{n:"Pass",c:"#5b6f8a"},
-  see:{n:"See",c:"#1f7fb8"},ort:{n:"Schöner Ort",c:"#3c8d4f"},start:{n:"Start / Parkplatz",c:"#3a4a5a"}};
+  gipfel:{n:"Gipfel",c:"#6b3f24",c2:"#c0784a"},huette:{n:"Hütte",c:"#a02c1c",c2:"#ef6a45"},pass:{n:"Pass",c:"#33507a",c2:"#6f98cf"},
+  see:{n:"See",c:"#0b5f99",c2:"#35b3ea"},ort:{n:"Schöner Ort",c:"#1f6b3a",c2:"#5cc07a"},start:{n:"Start / Parkplatz",c:"#2b3946",c2:"#6d8191"}};
 const CRIT={huette:[["schoen","Wie schön"],["gemuetlich","Wie gemütlich"]],ort:[["schoen","Wie schön"]],see:[["schoen","Wie schön"]],gipfel:[["schoen","Aussicht / wie schön"]],pass:[["schoen","Wie schön"]],start:[]};
 const ARTS={
   skitour:{n:"Skitour",c:"#1565c0",prof:null,t:{vf:4,vu:400,vd:1500}},

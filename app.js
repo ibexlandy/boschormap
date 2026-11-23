@@ -50,7 +50,8 @@ const starVal=(root,key)=>{const w=$(`[data-stars="${key}"]`,root);return w?(+w.
 
 /* ---------- Symbole ---------- */
 const catSvg=c=>`<svg><use href="#c-${c}"/></svg>`;
-function catIc(c,extra){const k=CATS[c]||CATS.ort;return `<span class="ic" style="background:${k.c}">${catSvg(c)}</span>`;}
+const catBg=k=>`linear-gradient(145deg,${k.c2||k.c} 0%,${k.c} 78%)`;
+function catIc(c,extra){const k=CATS[c]||CATS.ort;return `<span class="ic cat" style="background:${catBg(k)}">${catSvg(c)}</span>`;}
 const artIc=a=>`<span class="ic" style="background:${(ARTS[a]||ARTS.wandern).c}"><svg><use href="#i-route"/></svg></span>`;
 const pointDone=p=>p.cat==="gipfel"&&(p.visits||[]).length>0;
 
@@ -136,7 +137,7 @@ function clearTemp(){if(tempMk){map.removeMarker(tempMk);tempMk=null;}}
 
 /* ---------- Punkte auf der Karte ---------- */
 function markerHTML(p){const k=CATS[p.cat]||CATS.ort;const st=p.cat==="gipfel"?(pointDone(p)?" done":" open"):"";
-  return `<div class="mk ${p.cat}${st}${selPoint===p.id?" sel":""}" style="background:${k.c}">${catSvg(p.cat)}</div><div class="mkl">${esc(p.name||"")}${p.hoehe?" "+fmtN(p.hoehe):""}</div>`;}
+  return `<div class="mk ${p.cat}${st}${selPoint===p.id?" sel":""}" style="background:${catBg(k)};--c:${k.c}">${catSvg(p.cat)}</div><div class="mkl">${esc(p.name||"")}${p.hoehe?" "+fmtN(p.hoehe):""}</div>`;}
 function refreshMarkers(){const v=viewPrefs();for(const m of markers.values())map.removeMarker(m);markers.clear();if(v.showPts===false)return;
   for(const p of S.points){if(p.del)continue;const m=map.addMarker({lat:p.lat,lon:p.lon,anchor:[15,15],html:markerHTML(p),z:p.cat==="gipfel"?3:2});m.pid=p.id;markers.set(p.id,m);}}
 
@@ -353,9 +354,22 @@ async function bootApp(){if(gdPopupReturn())return;
     if(g==="points")openPanel(pointsPanel);else if(g==="tours")openPanel(toursPanel);else if(g==="plan")planEntry();else if(g==="weekend")openPanel(weekendPanel);else if(g==="more")openPanel(morePanel);});
   $("#bMenu").onclick=()=>{closePanel();openPanel(morePanel);};$("#bSearch").onclick=()=>{closePanel();openPanel(searchPanel);};
   $("#fGpx").onchange=e=>{const fl=[...e.target.files];e.target.value="";if(fl.length)importGPX(fl);};
-  bootOffline();gdBoot();swInit();
+  bootOffline();gdBoot();swInit();handleShared();
+  if("launchQueue" in window)try{launchQueue.setConsumer(async p=>{if(!p.files||!p.files.length)return;const fs=await Promise.all(p.files.map(h=>h.getFile()));routeIncoming(fs);});}catch(e){}
   if(location.search.includes("admin"))showAdmin();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>{if(!p)navigator.storage.persist();});}catch(e){}}
+
+/* ---------- Geteilte oder geöffnete Dateien: GPX → Touren-Import, Fotos → Foto-Import ---------- */
+async function handleShared(){if(!/[?&]share=/.test(location.search))return;history.replaceState(null,"",location.pathname);
+  let files=[];try{const c=await caches.open("boschormap-share");for(const k of await c.keys()){const r=await c.match(k);const b=await r.blob();
+      files.push(new File([b],decodeURIComponent(r.headers.get("x-name")||"datei"),{type:b.type,lastModified:+r.headers.get("x-mod")||Date.now()}));await c.delete(k);}}catch(e){}
+  files=files.filter(f=>f.name!=="text");if(!files.length)return toast("Keine Datei empfangen – in der Suunto-App «GPX-Workout exp.» wählen",5000);routeIncoming(files);}
+async function routeIncoming(files){const gpx=[],img=[],other=[];
+  for(const f of files){if(/^image\//.test(f.type)||/\.(jpe?g|heic|heif|png)$/i.test(f.name)){img.push(f);continue;}
+    let isG=/\.gpx$/i.test(f.name)||/gpx/.test(f.type);if(!isG){try{isG=/<gpx[\s>]/i.test(await f.slice(0,4000).text());}catch(e){}}
+    (isG?gpx:other).push(isG&&!/\.gpx$/i.test(f.name)?new File([f],(f.name.replace(/\.[^.]+$/,"")||"suunto")+".gpx",{type:"application/gpx+xml",lastModified:f.lastModified}):f);}
+  if(other.length&&!gpx.length&&!img.length)toast(`«${other[0].name}» ist keine GPX-Datei – in der Suunto-App «GPX-Workout exp.» wählen`,6000);
+  if(gpx.length)await importGPX(gpx);else if(img.length){locateOnce();scanPhotos(img);}}
 
 /* ---------- Service-Worker und Update ---------- */
 let swReg=null,reloading=false;

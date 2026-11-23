@@ -1,4 +1,4 @@
-Boschor Map – v1.6 (privates Projekt)
+Boschor Map – v1.7 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,13 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.7
+- Direkt an Boschor Map teilen (Android): in der Suunto-App «GPX-Workout exp.» › Boschor Map – der GPX-Import
+  öffnet sich sofort. Auch Fotos aus der Galerie lassen sich teilen. Hinweis: Damit Boschor Map im Teilen-Menü
+  erscheint, die App einmal deinstallieren und in Chrome neu installieren (Daten bleiben erhalten).
+- PC: .gpx-Dateien mit «Öffnen mit › Boschor Map» direkt öffnen.
+- Neue, moderne Ortssymbole (Linien-Piktogramme); Gipfel «schon oben» mit grünem Punkt, «noch offen» gestrichelt.
 
 NEU IN v1.6
 - Hütten, Gipfel, Pässe, Seen usw. auf der Karte erkennen: lange drücken (PC: Rechtsklick) – Namen von swisstopo
