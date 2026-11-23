@@ -1,4 +1,4 @@
-Boschor Map – v1.7 (privates Projekt)
+Boschor Map – v1.8 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,16 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.8
+- Suunto teilt einen Link statt einer Datei: Boschor Map lädt das GPX-Workout jetzt selbst über diesen Link
+  (Internet nötig) und öffnet den Import. Klappt es nicht, zeigt die App an, was angekommen ist.
+- Teilen nimmt jeden Dateityp an; Boschor Map prüft selbst, ob es GPX oder ein Foto ist.
+- Namen auf der Karte als dunkles Schild mit weisser Schrift und Farbstreifen der Kategorie – gut lesbar
+  auch auf Winterkarte und Luftbild.
+- Ebenen (Hangneigung, Skitouren, Wildruhezonen usw.) liegen jetzt unter den eigenen Orten, Linien und Knöpfen.
+- Nach dem Update Boschor Map einmal deinstallieren und in Chrome neu installieren (Teilen-Menü geändert,
+  Daten bleiben erhalten).
 
 NEU IN v1.7
 - Direkt an Boschor Map teilen (Android): in der Suunto-App «GPX-Workout exp.» › Boschor Map – der GPX-Import

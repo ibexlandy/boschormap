@@ -1,6 +1,6 @@
 /* Boschor Map – Service-Worker (Scope /boschormap/). Eigene Cache-Namen «boschormap-…»;
    es werden ausschliesslich eigene Caches gelöscht, nie die von IbexMap auf derselben Herkunft. */
-const V="1.7",APP="boschormap-app-v"+V,VIEW="boschormap-view",SHARE="boschormap-share",MAXVIEW=4000;
+const V="1.8",APP="boschormap-app-v"+V,VIEW="boschormap-view",SHARE="boschormap-share",MAXVIEW=4000;
 const SHELL=["./","index.html","app.css","core.js","map.js","gpx.js","app.js","tours.js","offline.js","sync.js","admin.js",
   "manifest.webmanifest","icon-192.png","icon-512.png","icon-maskable-512.png","favicon.png","apple-touch-icon.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(APP).then(c=>Promise.all(SHELL.map(u=>fetch(u,{cache:"no-store"}).then(r=>{if(r.ok)return c.put(new URL(u,self.registration.scope).href,r);}).catch(()=>{})))).then(()=>self.skipWaiting()));});
@@ -19,10 +19,11 @@ async function tile(req,u){const m=u.pathname.match(/^\/1\.0\.0\/([^/]+)\/defaul
 const appHit=async u=>{try{return await (await caches.open(APP)).match(u);}catch(e){return undefined;}};
 /* «Teilen an Boschor Map» (Android): Dateien zwischenspeichern, dann die App öffnen */
 async function shareIn(req){try{const fd=await req.formData();const c=await caches.open(SHARE);let n=0;
-    for(const f of fd.getAll("files")){if(!f||typeof f==="string"||!f.size)continue;n++;
+    const all=[];for(const [k,v] of fd.entries())if(v&&typeof v!=="string")all.push(v);
+    for(const f of all){if(!f.size)continue;n++;
       await c.put(new URL("./share/"+Date.now()+"-"+n,self.registration.scope).href,new Response(f,{headers:{"Content-Type":f.type||"application/octet-stream","x-name":encodeURIComponent(f.name||"datei"),"x-mod":String(f.lastModified||Date.now())}}));}
     const t=[fd.get("title"),fd.get("text"),fd.get("url")].filter(x=>x&&typeof x==="string").join(" ");
-    if(!n&&t)await c.put(new URL("./share/text-"+Date.now(),self.registration.scope).href,new Response(t,{headers:{"Content-Type":"text/plain","x-name":"text"}}));}catch(err){}
+    if(t)await c.put(new URL("./share/text-"+Date.now(),self.registration.scope).href,new Response(t,{headers:{"Content-Type":"text/plain","x-name":"text"}}));}catch(err){}
   return Response.redirect(new URL("./?share=1",self.registration.scope).href,303);}
 self.addEventListener("fetch",e=>{const req=e.request;
   if(req.method==="POST"&&new URL(req.url).pathname.endsWith("/share-target")){e.respondWith(shareIn(req));return;}

@@ -137,7 +137,7 @@ function clearTemp(){if(tempMk){map.removeMarker(tempMk);tempMk=null;}}
 
 /* ---------- Punkte auf der Karte ---------- */
 function markerHTML(p){const k=CATS[p.cat]||CATS.ort;const st=p.cat==="gipfel"?(pointDone(p)?" done":" open"):"";
-  return `<div class="mk ${p.cat}${st}${selPoint===p.id?" sel":""}" style="background:${catBg(k)};--c:${k.c}">${catSvg(p.cat)}</div><div class="mkl">${esc(p.name||"")}${p.hoehe?" "+fmtN(p.hoehe):""}</div>`;}
+  return `<div class="mk ${p.cat}${st}${selPoint===p.id?" sel":""}" style="background:${catBg(k)};--c:${k.c}">${catSvg(p.cat)}</div>${p.name||p.hoehe?`<div class="mkl" style="--c:${k.c}">${esc(p.name||"")}${p.hoehe?`<b>${fmtN(p.hoehe)}</b>`:""}</div>`:""}`;}
 function refreshMarkers(){const v=viewPrefs();for(const m of markers.values())map.removeMarker(m);markers.clear();if(v.showPts===false)return;
   for(const p of S.points){if(p.del)continue;const m=map.addMarker({lat:p.lat,lon:p.lon,anchor:[15,15],html:markerHTML(p),z:p.cat==="gipfel"?3:2});m.pid=p.id;markers.set(p.id,m);}}
 
@@ -363,7 +363,20 @@ async function bootApp(){if(gdPopupReturn())return;
 async function handleShared(){if(!/[?&]share=/.test(location.search))return;history.replaceState(null,"",location.pathname);
   let files=[];try{const c=await caches.open("boschormap-share");for(const k of await c.keys()){const r=await c.match(k);const b=await r.blob();
       files.push(new File([b],decodeURIComponent(r.headers.get("x-name")||"datei"),{type:b.type,lastModified:+r.headers.get("x-mod")||Date.now()}));await c.delete(k);}}catch(e){}
-  files=files.filter(f=>f.name!=="text");if(!files.length)return toast("Keine Datei empfangen – in der Suunto-App «GPX-Workout exp.» wählen",5000);routeIncoming(files);}
+  const txt=files.find(f=>f.name==="text");files=files.filter(f=>f.name!=="text");
+  if(files.length)return routeIncoming(files);
+  const t=txt?(await txt.text()).trim():"";const link=(t.match(/https?:\/\/\S+/)||[])[0];
+  /* Kommt nur ein Link: direkt versuchen (klappt nur, wenn der Server es erlaubt), sonst anzeigen */
+  /* Suunto teilt «GPX-Workout exp.» als Link auf api.sports-tracker.com – die Datei direkt dort holen */
+  if(link){if(!navigator.onLine){toast("Suunto-Link empfangen – zum Laden braucht es Internet",5000);}
+    else{progress("Workout laden",0,0,/sports-tracker|suunto/.test(link)?"von Suunto …":"vom Link …");
+      try{const r=await fetch(link);if(r.ok){const b=await r.blob();if(/<gpx[\s>]/i.test(await b.slice(0,4000).text())){const cd=r.headers.get("content-disposition")||"";
+          const nm=decodeURIComponent((cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)/i)||[])[1]||"")||`Suunto_${today()}.gpx`;progressDone();return routeIncoming([new File([b],/\.gpx$/i.test(nm)?nm:nm+".gpx",{type:"application/gpx+xml"})]);}}}catch(e){}
+      progressDone();}}
+  openPanel(()=>({title:"Geteilt – keine Datei",icon:`<svg><use href="#i-info"/></svg>`,html:`<div class="note">Boschor Map hat ${t?"nur Text bzw. einen Link":"nichts"} erhalten, keine GPX-Datei.</div>
+    ${t?`<div class="card"><h3>Empfangen</h3><p class="small" style="word-break:break-all;white-space:pre-wrap">${esc(t)}</p>${link?`<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Link öffnen</a>`:""}</div>`:""}
+    <div class="card"><h3>So klappt es sicher</h3><p class="small">In der Suunto-App «GPX-Workout exp.» › <b>Speichern</b> (Ordner Download) wählen, dann hier <b>Mehr › GPX importieren</b>.</p>
+    <button class="btn pri" id="shImp"><svg><use href="#i-gpx"/></svg>GPX importieren</button></div>`,after(P){$("#shImp",P).onclick=()=>$("#fGpx").click();}}));}
 async function routeIncoming(files){const gpx=[],img=[],other=[];
   for(const f of files){if(/^image\//.test(f.type)||/\.(jpe?g|heic|heif|png)$/i.test(f.name)){img.push(f);continue;}
     let isG=/\.gpx$/i.test(f.name)||/gpx/.test(f.type);if(!isG){try{isG=/<gpx[\s>]/i.test(await f.slice(0,4000).text());}catch(e){}}
