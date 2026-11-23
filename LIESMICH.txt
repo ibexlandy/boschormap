@@ -1,4 +1,4 @@
-Boschor Map – v1.12 (privates Projekt)
+Boschor Map – v1.13 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,10 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.13
+- Steilheit statt einzelnem «steilstem Punkt»: Farbbalken mit km pro Klasse (unter 15°, 15–25°, 25–30°, 30–35°,
+  über 35°), Höhenprofil in denselben Farben, Steilheit beim Antippen, «Abschnitte ab 30° zeigen» auf der Karte.
 
 NEU IN v1.12
 - Mehrere GPS-Tracks zu einer Tour zusammenfassen (Aufzeichnung unterbrochen):

@@ -23,7 +23,7 @@ function openPanel(fn,o){nav.push({fn,o:o||{}});renderPanel();const sh=$("#sheet
   try{if(!(history.state&&history.state.bm))history.pushState({bm:1},"");}catch(e){}}
 function replacePanel(fn,o){if(!nav.length)return openPanel(fn,o);nav[nav.length-1]={fn,o:o||{}};renderPanel();}
 function panelBack(){nav.pop();if(!nav.length)return closePanel();renderPanel();}
-function closePanel(fromPop){nav.length=0;clearTemp();const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
+function closePanel(fromPop){nav.length=0;clearTemp();if(S._steep){S._steep=null;map.render();}const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
   $$("#bar button").forEach(b=>b.classList.remove("on"));
   if(selTour&&!planState){selTour=null;map.render();removeProfDot();}if(selPoint){selPoint=null;refreshMarkers();}}
 window.addEventListener("popstate",()=>{if($(".pbig")){closeGallery();try{history.pushState({bm:1},"");}catch(e){}return;}
@@ -59,7 +59,7 @@ const pointDone=p=>p.cat==="gipfel"&&(p.visits||[]).length>0;
 function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:[45.5,5.6,48.1,10.9]});
   const lv=lsJ("lastview",null);if(lv&&isFinite(lv.lat))map.setView(lv.lat,lv.lon,lv.z);else map.setView(46.75,8.2,8);
   setBase(v.base||"lk");for(const k in OVERLAYS)if(v.ov&&v.ov[k])setOverlay(k,true);
-  map.addDrawer(drawTours);map.addDrawer(drawMisc);
+  map.addDrawer(drawTours);map.addDrawer(drawMisc);map.addDrawer(drawSteep);
   map.on("moveend",()=>{const c=map.getCenter();ls("lastview",JSON.stringify({lat:+c.lat.toFixed(5),lon:+c.lon.toFixed(5),z:Math.round(map.z*4)/4}));});
   map.on("move",()=>{$("#map").classList.toggle("zl",map.z>=13);});
   map.on("click",onMapClick);map.on("markerclick",onMarkerClick);map.on("longpress",onLongPress);
@@ -86,6 +86,9 @@ function layersPanel(){const v=viewPrefs();
 /* Touren zeichnen: vereinfachte Linie je nach Zoom, Farbe nach Art, Ideen gestrichelt */
 function tourDisp(t){return t.disp||[];}
 function visibleTours(){const v=viewPrefs();return S.tours.filter(t=>!t.del&&t.disp&&t.disp.length>1&&((t.status==="idee")?v.showIdeas!==false:v.showDone!==false)||(selTour&&t.id===selTour&&!t.del));}
+/* Steile Abschnitte (ab 30°) der gewählten Tour bzw. Planung */
+function drawSteep(c,m){if(!S._steep)return;c.lineCap="round";c.lineJoin="round";for(const r of S._steep){c.beginPath();r.pts.forEach((q,i)=>{const p=m.project(q[0],q[1]);i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y);});
+  c.strokeStyle="#fff";c.lineWidth=10;c.stroke();c.strokeStyle=r.c;c.lineWidth=6;c.stroke();}}
 function drawTours(c,m){const pk=!!(planState||placing);if(m.el.classList.contains("pick")!==pk)m.el.classList.toggle("pick",pk);if(tpmFor&&tpmFor!==selTour)setTimeout(clearTourPhotoMarks,0);const b=m.getBounds();const sel=selTour;const z=m.z;
   const list=visibleTours();list.sort((a,b2)=>(a.id===sel)-(b2.id===sel));
   for(const t of list){const bb=t.bbox;if(!bb||bb[2]<b[0]||bb[0]>b[2]||bb[3]<b[1]||bb[1]>b[3])continue;const isSel=t.id===sel;

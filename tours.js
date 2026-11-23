@@ -104,7 +104,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
     ${t.emax!=null?`<div><b>${fmtN(t.emax)} m</b><small>höchster Punkt</small></div>`:""}${!idea&&t.moving?`<div><b>${fmtDur(est)}</b><small>Schätzung vorher</small></div>`:""}</div>
    ${t.diffAuto?diffHTML(t.diffAuto).replace("Schwierigkeit (Vorschlag)",/Skirouten/.test(t.diffAuto.src||"")?"Schwierigkeit laut Skirouten":"Schwierigkeit laut Wegen"):""}
    ${prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="tProf"></canvas><div class="muted small" id="tProfI">Antippen oder darüberfahren: Stelle auf der Karte</div></div>`:""}
-   ${prof.length>2?steepHTML(steepest(prof,t.prof?60:100)):""}
+   ${prof.length>2?steepHTML(slopeInfo(prof,t.prof?60:100)):""}
    ${t.merged?`<p class="muted small">Aus ${t.merged} Tracks zusammengefasst.</p>`:""}
    ${!idea&&(t.removed||t.pauses)?`<p class="muted small">Bereinigt: ${t.pauses?t.pauses+" Pausen zusammengefasst":""}${t.removed&&t.pauses?", ":""}${t.removed?t.removed+" Ausreisser entfernt":""}.</p>`:""}
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
@@ -122,7 +122,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
     <button class="btn red" id="tDel"><svg><use href="#i-trash"/></svg>Löschen</button></div>`,
    async after(P){bindDiff(P);P.addEventListener("stars",async e=>{const k=e.target.dataset.stars;t.rate=Object.assign({},t.rate||{});t.rate[k]=e.detail;await saveTour(t);});
      if(prof.length>1){const top=prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]);const b=winter?await bulletinAt(top.lat,top.lon):null;const band=b&&b.critLow!=null?[b.critLow,b.critHigh]:null;
-       drawProfile($("#tProf",P),prof,{band,steep:steepest(prof,t.prof?60:100),info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
+       const si=slopeInfo(prof,t.prof?60:100);bindSteep(P,prof,si);drawProfile($("#tProf",P),prof,{band,slope:si,info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
      bindTourPhotoCard(P,t);
      $("#tEd",P).onclick=()=>openPanel(()=>editTourPanel(t));
      const re=$("#tRe",P);if(re)re.onclick=()=>{closePanel();startPlan({edit:t.id});};
@@ -160,14 +160,15 @@ function drawProfile(cv,prof,o){o=o||{};if(!cv||prof.length<2)return;const dpr=M
     const ks=[1,2,5,10,20,50].find(s=>D/1000/s<=6)||50;for(let k=0;k<=D/1000;k+=ks){c.fillText(k+" km",X(k*1000)-6,H-5);}
     if(o.band){const y1=Y(Math.min(hmax,o.band[1]||hmax)),y0=Y(Math.max(hmin,o.band[0]));if(y0>T){c.fillStyle="rgba(255,152,0,.18)";c.fillRect(L,y1,W-L-R,y0-y1);c.fillStyle="#b26a00";c.fillText("kritisch laut Bulletin",L+4,y1+11);}}
     c.beginPath();c.moveTo(X(0),Y(hmin));for(const p of prof)c.lineTo(X(p.d),Y(p.h));c.lineTo(X(D),Y(hmin));c.closePath();c.fillStyle="rgba(127,179,213,.45)";c.fill();
-    c.beginPath();prof.forEach((p,i)=>i?c.lineTo(X(p.d),Y(p.h)):c.moveTo(X(p.d),Y(p.h)));c.strokeStyle="#1f3a52";c.lineWidth=2;c.stroke();
-    if(o.steep){const st=o.steep;c.beginPath();let f=true;for(const p of prof){if(p.d<st.d0||p.d>st.d1)continue;f?c.moveTo(X(p.d),Y(p.h)):c.lineTo(X(p.d),Y(p.h));f=false;}c.strokeStyle="#c8102e";c.lineWidth=4;c.stroke();}
+    if(o.slope){c.lineWidth=3;c.lineCap="round";for(let i=1;i<prof.length;i++){c.beginPath();c.moveTo(X(prof[i-1].d),Y(prof[i-1].h));c.lineTo(X(prof[i].d),Y(prof[i].h));c.strokeStyle=o.slope.seg[i]?SLOPE_CL[o.slope.seg[i]].c:"#1f3a52";c.stroke();}c.lineCap="butt";}
+    else{c.beginPath();prof.forEach((p,i)=>i?c.lineTo(X(p.d),Y(p.h)):c.moveTo(X(p.d),Y(p.h)));c.strokeStyle="#1f3a52";c.lineWidth=2;c.stroke();}
     for(const m of o.marks||[]){if(m.d==null)continue;const x=X(m.d),y=Y(m.h!=null?m.h:hmin);c.beginPath();c.arc(x,y,5,0,7);c.fillStyle="#13263a";c.fill();c.lineWidth=2;c.strokeStyle="#fff";c.stroke();}
     if(sel){c.strokeStyle="#c8102e";c.lineWidth=1.5;c.beginPath();c.moveTo(X(sel.d),T);c.lineTo(X(sel.d),H-B);c.stroke();c.beginPath();c.arc(X(sel.d),Y(sel.h),4,0,7);c.fillStyle="#c8102e";c.fill();}};
   draw();const pick=e=>{const r=cv.getBoundingClientRect();const d=Math.max(0,Math.min(D,(e.clientX-r.left-L)/(W-L-R)*D));let b=prof[0];for(const p of prof)if(Math.abs(p.d-d)<Math.abs(b.d-d))b=p;
-    draw(b);if(o.info)o.info.textContent=`${fmtKm(b.d)} · ${fmtN(b.h)} m ü. M.`;if(b.lat!=null){if(!profMk)profMk=map.addMarker({lat:b.lat,lon:b.lon,anchor:[7,7],html:`<div class="prof-dot"></div>`,z:60});else map.moveMarker(profMk,b.lat,b.lon);}};
+    draw(b);const bi=prof.indexOf(b);if(o.info)o.info.textContent=`${fmtKm(b.d)} · ${fmtN(b.h)} m ü. M.${o.slope?` · ${fmtN(Math.round(o.slope.deg[bi]))}°`:""}`;if(b.lat!=null){if(!profMk)profMk=map.addMarker({lat:b.lat,lon:b.lon,anchor:[7,7],html:`<div class="prof-dot"></div>`,z:60});else map.moveMarker(profMk,b.lat,b.lon);}};
   if(o.marks&&o.marks.length&&o.onMark)cv.onclick=e=>{const r=cv.getBoundingClientRect(),x=e.clientX-r.left;let bi=-1,bd=12;o.marks.forEach((m,i)=>{if(m.d==null)return;const dx=Math.abs(X(m.d)-x);if(dx<bd){bd=dx;bi=i;}});if(bi>=0)o.onMark(bi);};
-  cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);pick(e);};cv.onpointermove=e=>{if(e.pointerType==="mouse"||e.buttons)pick(e);};}
+  cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);pick(e);};
+  cv.onpointerup=()=>{if(!profMk)return;const p=profMk;const bb=map.getBounds();if(p.lat<bb[0]||p.lat>bb[2]||p.lon<bb[1]||p.lon>bb[3])map.setView(p.lat,p.lon,Math.max(map.zoom,14));};cv.onpointermove=e=>{if(e.pointerType==="mouse"||e.buttons)pick(e);};}
 
 /* ---------- Planung wie bei SchweizMobil: antippen, Linie folgt dem Weg, Höhenprofil und Zeit laufend ---------- */
 let planState=null;const routeCache=new Map();
@@ -277,13 +278,24 @@ function routeDifficulty(segs,art){const ski=!!ARTS[art]&&!!ARTS[art].ski,bike=/
   for(const L of segs){if(!L)continue;if(!L._tags){for(let i=1;i<L.length;i++)tot+=distM(L[i-1][0],L[i-1][1],L[i][0],L[i][1]);continue;}
     for(const t of L._tags){tot+=t.d;const v=t[key];if(!v)continue;cov+=t.d;km[v]=(km[v]||0)+t.d;if(t.name)names.add(t.goal?`${t.goal} (${t.name})`:t.name);if(!top||order.indexOf(v)>order.indexOf(top.v))top={v,lat:t.lat,lon:t.lon};}}
   if(!top)return null;return {lvl:top.v,lat:top.lat,lon:top.lon,km:order.filter(o=>km[o]).map(o=>[o,Math.round(km[o])]),cov:tot?Math.round(cov/tot*100):0,scale:ski?"SAC-Skitouren":bike?"MTB":"SAC",src:ski?"swisstopo-Skirouten":"OpenStreetMap",names:[...names].slice(0,4)};}
-/* Steilster Abschnitt entlang der Linie (aus dem Höhenprofil, Fenster ca. 60 m) */
-function steepest(prof,win){win=win||60;if(!prof||prof.length<3)return null;let best=null,j=0;
-  for(let i=0;i<prof.length;i++){if(j<=i)j=i+1;while(j<prof.length&&prof[j].d-prof[i].d<win)j++;if(j>=prof.length)break;const dd=prof[j].d-prof[i].d,dh=prof[j].h-prof[i].h;if(dd<=0)continue;
-    const deg=Math.atan(Math.abs(dh)/dd)*180/Math.PI;if(!best||deg>best.deg){const m=prof[Math.round((i+j)/2)];best={deg,d0:prof[i].d,d1:prof[j].d,lat:m.lat,lon:m.lon,h:m.h,d:m.d};}}
-  return best&&best.lat!=null?best:null;}
-function steepHTML(st){if(!st)return "";return `<div class="card"><h3>Steilster Abschnitt</h3><div class="row"><span class="tag" style="font-size:15px;background:${st.deg>=35?"#c8102e":st.deg>=30?"#ef6c00":"#5c6b78"};color:#fff">${fmtN(st.deg)}°</span><span class="grow muted small">bei km ${fmtN(st.d/1000,1)} auf ${fmtN(Math.round(st.h))} m ü. M. · Steilheit entlang der Linie, das Gelände daneben kann steiler sein</span>
-   <button class="btn sm" data-diffshow="${st.lat},${st.lon}">Stelle zeigen</button></div></div>`;}
+/* Steilheit entlang der Linie (aus dem Höhenprofil, Fenster ca. 60 m, bei GPX 100 m) */
+const SLOPE_CL=[{m:15,c:"#9aa5ae",n:"unter 15°"},{m:25,c:"#e3c13b",n:"15–25°"},{m:30,c:"#ef8a2e",n:"25–30°"},{m:35,c:"#d7263d",n:"30–35°"},{m:99,c:"#8e44ad",n:"über 35°"}];
+const slopeCl=deg=>SLOPE_CL.findIndex(k=>deg<k.m);
+function slopeInfo(prof,win){win=win||60;if(!prof||prof.length<3)return null;const n=prof.length,deg=new Float32Array(n);let a=0,b=0;
+  for(let i=0;i<n;i++){while(prof[a].d<prof[i].d-win/2)a++;while(b<n-1&&prof[b+1].d<=prof[i].d+win/2)b++;let i0=a,i1=Math.max(b,Math.min(n-1,a+1));if(i1===i0)i0=Math.max(0,i0-1);
+    const dd=prof[i1].d-prof[i0].d;deg[i]=dd>0?Math.atan(Math.abs(prof[i1].h-prof[i0].h)/dd)*180/Math.PI:0;}
+  const km=SLOPE_CL.map(()=>0),seg=new Int8Array(n);let mx=0;
+  for(let i=1;i<n;i++){const k=slopeCl((deg[i-1]+deg[i])/2);seg[i]=k;km[k]+=prof[i].d-prof[i-1].d;if(deg[i]>mx)mx=deg[i];}
+  return {deg,seg,km,max:mx};}
+function steepHTML(si){if(!si)return "";const tot=si.km.reduce((a,b)=>a+b,0)||1;const steep=si.km[3]+si.km[4];
+  return `<div class="card"><h3>Steilheit</h3><div class="slbar">${SLOPE_CL.map((k,i)=>si.km[i]>0?`<i style="width:${si.km[i]/tot*100}%;background:${k.c}"></i>`:"").join("")}</div>
+   <div class="slleg">${SLOPE_CL.map((k,i)=>si.km[i]>=50?`<span><b style="background:${k.c}"></b>${k.n}: ${fmtN(si.km[i]/1000,1)} km</span>`:"").join("")}</div>
+   <div class="row" style="margin-top:6px"><span class="grow muted small">Steilheit entlang der Linie (Farben auch im Höhenprofil). Bei Spitzkehren ist das Gelände daneben steiler – massgebend bleibt die Ebene «Hangneigung über 30°».</span>
+   ${steep>=20?`<button class="btn sm" data-steepmap>${S._steep?"Ausblenden":"Abschnitte ab 30° zeigen"}</button>`:""}</div></div>`;}
+/* Abschnitte ab 30° auf der Karte markieren */
+function steepRuns(prof,si){const runs=[];let cur=null;for(let i=1;i<prof.length;i++){if(si.seg[i]>=3&&prof[i].lat!=null){if(!cur){cur={c:SLOPE_CL[si.seg[i]].c,pts:[[prof[i-1].lat,prof[i-1].lon]]};runs.push(cur);}cur.pts.push([prof[i].lat,prof[i].lon]);if(si.seg[i]===4)cur.c=SLOPE_CL[4].c;}else cur=null;}return runs;}
+function bindSteep(P,prof,si){const b=$("[data-steepmap]",P);if(!b)return;b.onclick=()=>{if(S._steep){S._steep=null;b.textContent="Abschnitte ab 30° zeigen";}else{S._steep=steepRuns(prof,si);b.textContent="Ausblenden";
+    const all=S._steep.flatMap(r=>r.pts);if(all.length)map.fitBounds(bboxOf(all),60,sheetPad(),sheetPadR());}map.render();};}
 function diffHTML(d){if(!d)return "";return `<div class="card"><h3>Schwierigkeit (Vorschlag)</h3><div class="row"><span class="tag" style="font-size:15px">${esc(d.lvl)}</span><span class="grow muted small">${/Skirouten/.test(d.src||"")?"laut":"schwierigster Abschnitt laut"} ${d.src||"OpenStreetMap"} (${d.scale}-Skala) · Angaben für ${d.cov} % der Strecke</span>
    ${d.lat!=null&&!/Skirouten/.test(d.src||"")?`<button class="btn sm" data-diffshow="${d.lat},${d.lon}">Stelle zeigen</button>`:""}</div>${/Skirouten/.test(d.src||"")?`<div class="muted small" style="margin-top:4px">swisstopo gibt die Schwierigkeit für die ganze Route an, nicht für einzelne Stellen.</div>`:""}
    <div class="small" style="margin-top:6px">${d.km.map(([k,m])=>`${k}: ${fmtN(m/1000,1)} km`).join(" · ")}</div>${d.names&&d.names.length?`<div class="muted small" style="margin-top:4px">Skirouten: ${d.names.map(esc).join(" · ")}</div>`:""}</div>`;}
@@ -321,12 +333,12 @@ function planPanel(){const ps=planState;if(!ps)return {title:"Planen",html:`<div
    <div class="kv"><div><b>${fmtKm(ps.dist||0)}</b><small>Distanz</small></div><div><b>${ps.up!=null?fmtN(ps.up)+" m":"…"}</b><small>Aufstieg</small></div><div><b>${ps.down!=null?fmtN(ps.down)+" m":"…"}</b><small>Abstieg</small></div><div><b>${est!=null?fmtDur(est):"…"}</b><small>Zeit (dein Tempo)</small></div></div>
    ${ps.prof&&ps.prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="plProf"></canvas><div class="muted small" id="plProfI">Höhen: swissALTI3D</div></div>`:ps.wps.length>1?`<p class="muted small">${navigator.onLine?"Höhenprofil wird geladen …":"Höhenprofil nur online (swisstopo)"}</p>`:""}
    ${diffHTML(routeDifficulty(ps.segs,ps.art))}
-   ${ps.prof?steepHTML(steepest(ps.prof)):""}
+   ${ps.prof?steepHTML(slopeInfo(ps.prof)):""}
    <div class="card"><div class="crit"><span>Tempo ${(fac*100).toFixed(0)} %<br><small class="muted">${fmtN(t.vf,1)} km/h · ↑${fmtN(t.vu)} · ↓${fmtN(t.vd)} Hm/h</small></span><input type="range" id="plF" min="60" max="150" step="5" value="${Math.round(fac*100)}" style="flex:1;max-width:180px"></div></div>
    <div class="btns"><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
     <button class="btn" id="plRev"${ps.wps.length<2?" disabled":""}>Umkehren</button><button class="btn" id="plZ"${ps.wps.length<2?" disabled":""}>Zurück zum Start</button></div>
 `,foot:`<button class="btn" id="plU2"${ps.undo.length?"":" disabled"} title="Rückgängig (Ctrl+Z)"><svg><use href="#i-undo"/></svg>Rückgängig</button><button class="btn pri" id="plS"${ps.wps.length<2?" disabled":""}><svg><use href="#i-check"/></svg>${ps.editId?"Speichern":"Als Idee speichern"}</button><button class="btn" id="plQ"><svg><use href="#i-close"/></svg>${ps.editId?"Verwerfen":"Beenden"}</button>`,onClose:planQuit,
-   after(P){if(ps.prof&&ps.prof.length>1)drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P),steep:steepest(ps.prof)});bindDiff(P);
+   after(P){if(ps.prof&&ps.prof.length>1){const si=slopeInfo(ps.prof);bindSteep(P,ps.prof,si);drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P),slope:si});}bindDiff(P);
      $$("[data-art]",P).forEach(b=>b.onclick=()=>{if(b.dataset.art!==ps.art)setPlanArt(b.dataset.art);});
      $$("[data-pm]",P).forEach(b=>b.onclick=()=>{ps.mode=b.dataset.pm;refreshPanel();toast(`Neue Punkte: ${MODE_N[ps.mode]}`,1500);});
      $("#plQ",P).onclick=planQuit;
