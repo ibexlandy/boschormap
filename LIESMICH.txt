@@ -1,0 +1,81 @@
+Boschor Map – v1.1 (privates Projekt)
+==========================================
+
+Inhalt des Ordners
+  index.html             die App
+  app.css                Aussehen
+  js/                    Programmteile (Karte, Touren, Offline, Abgleich, Verwaltung)
+  sw.js                  Offline-Speicher der App (Scope /boschormap/)
+  manifest.webmanifest   damit man die App auf Handy und Tablet installieren kann
+  icon-*.png, apple-touch-icon.png, favicon.png   App-Logo
+  LIESMICH.txt           diese Datei
+
+1) Hosting auf GitHub Pages
+  Konto «ibexlandy», neues Repository «boschormap» (öffentlich).
+  Alle Dateien des Zip (mit dem Ordner js) ins Repository hochladen.
+  Settings › Pages › Source: «Deploy from a branch», Branch «main», Ordner «/ (root)» › Save.
+  Nach 1–2 Minuten erreichbar: https://ibexlandy.github.io/boschormap/
+  Neue Version: alle Dateien des Zip erneut hochladen (ersetzen), danach in der App
+  Mehr › Einstellungen › «Nach Update suchen».
+
+  WICHTIG (gleiche Herkunft wie IbexMap): Zuerst IbexMap v10.1 hochladen und IbexMap auf jedem Gerät
+  einmal mit Internet öffnen. Ältere IbexMap-Versionen räumen beim Aktualisieren auch die Speicher anderer
+  Apps auf derselben Adresse weg. Ab v10.1 nicht mehr.
+
+2) Installieren
+  PC (Chrome): Adresse öffnen › Symbol «App installieren» in der Adressleiste.
+  Samsung-Handy und -Tablet (Chrome): Adresse öffnen › Menü ⋮ › «App installieren».
+  Die App startet ohne Internet und zeigt alle gespeicherten Daten und Regionen.
+
+3) Google Drive (Abgleich zwischen den Geräten) – eigenes Google-Konto, eigenes Projekt
+  a) Im separaten Google-Konto für Boschor Map anmelden: https://console.cloud.google.com
+  b) Neues Projekt anlegen, Name z. B. «Boschor Map».
+  c) APIs & Dienste › Bibliothek › «Google Drive API» › Aktivieren.
+  d) Google Auth Platform › Branding: App-Name «Boschor Map», Support-E-Mail = dieses Konto.
+  e) Google Auth Platform › Zielgruppe: «Extern», Status «Test». Unter Testnutzer dieses Konto eintragen.
+  f) Google Auth Platform › Clients › Client erstellen › Typ «Webanwendung», Name «Boschor Map».
+       Autorisierte JavaScript-Quellen:   https://ibexlandy.github.io
+       Autorisierte Weiterleitungs-URIs:  https://ibexlandy.github.io/boschormap/
+     Erstellen › die Client-ID kopieren (endet auf .apps.googleusercontent.com).
+     Ein Clientschlüssel (Secret) wird nicht gebraucht.
+  g) In Boschor Map: Mehr › Google Drive › Client-ID einfügen › «Speichern und verbinden»
+     › mit dem Boschor-Konto anmelden. Auf jedem Gerät einmal.
+  Die Daten liegen im versteckten App-Ordner dieses Kontos (nur für Boschor Map sichtbar).
+  Änderungen werden automatisch abgeglichen (abschaltbar); das Symbol oben rechts gleicht sofort ab.
+
+4) Sicherung
+  Mehr › Daten und Sicherung › «Sicherung speichern»: alles in einer Datei (BoschorMap_Sicherung_<Datum>.json),
+  unabhängig von Google. «Sicherung einlesen»: zusammenführen (neuere Version gewinnt) oder alles ersetzen.
+
+5) Quellen
+  Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
+  Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
+  Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.1 (erste Version)
+- Karten: swisstopo-Landeskarte, Winterkarte und Luftbild (SWISSIMAGE). Ebenen: Hangneigung über 30°,
+  Wildruhezonen und Jagdbanngebiete, Skitourenrouten, Wanderwege, Velo- und Mountainbike-Routen.
+  Eigene, schlanke Kartenanzeige ohne fremde Bibliothek (schneller Start, auch ohne Netz).
+- Orte: Gipfel, Hütte, Pass, See, Schöner Ort, Start/Parkplatz. Höhe automatisch (swissALTI3D), Besuche mit
+  Datum und Notiz, Fotos, Bewertung (gesamt und z. B. Hütte: schön, gemütlich). Gipfel «schon oben» gefüllt,
+  «noch offen» als Umriss. Punkt setzen mit Fadenkreuz, langes Drücken oder Rechtsklick auf die Karte.
+- Fotos importieren (auch ganzer Ordner): nur Fotos mit Aufnahmeort, Anhängen an Orte bis 150 m,
+  einfacher Modus nur mit Bemerkung. Vollbild mit Blättern und Zoomen.
+- Touren: GPX aus der Suunto-App, mehrere auf einmal. Automatische Bereinigung (Pausen, GPS-Ausreisser,
+  Höhenrauschen), Zeit in Bewegung, Original bleibt gespeichert. Gipfel bis 100 m neben dem Track werden
+  vorgeschlagen und mit dem Tourdatum eingetragen; passende Tourideen werden erkannt.
+  Höhenprofil (antippen zeigt die Stelle auf der Karte), Bewertung (gesamt, wie streng, wie schön),
+  Schwierigkeit (SAC-Skalen), Liste mit Filter nach Art und Jahr und Summen pro Jahr.
+- Planen wie bei SchweizMobil: Punkte antippen, Linie folgt dem Weg (BRouter) oder als Luftlinie, Punkte ziehen,
+  Zwischenpunkt durch Tippen auf die Linie, laufend Distanz, Auf-/Abstieg, Höhenprofil und Zeit. GPX-Export.
+- Persönliches Tempo pro Sportart, gelernt aus den eigenen Touren (Ebene, Aufstieg, Abstieg), mit Diagramm
+  und Vergleich geschätzt/tatsächlich. Regler für das eigene Tempo.
+- Wochenende: Tourideen nach Art, Dauer und Entfernung ab Zuhause, mit Wetter und Lawinengefahr.
+- Offline-Regionen: Ausschnitt mit vier Griffen wählen, Karten, Ebenen und Zoomstufe wählen, Grösse wird
+  vorher geschätzt (max. 300 km² und 20'000 Kacheln). Download massvoll mit Fortschritt (erledigt / läuft /
+  kommt noch), anhalten, fortsetzen, löschen. Orts- und Gipfelnamen der Region für die Suche ohne Netz.
+- Lawinenbulletin (SLF) und Wetterprognose (MeteoSchweiz) für die ganze Schweiz offline speichern;
+  pro Ort und Tour: Gefahrenstufe, Probleme mit Expositionen und Höhen, kritischer Bereich im Höhenprofil,
+  Prognose am passenden Prognosepunkt.
+- Checklisten pro Sportart, Verwaltungstabelle am PC (bearbeiten, Mehrfachauswahl, CSV für Google Tabellen),
+  Papierkorb 30 Tage, Sicherung als Datei, Abgleich über Google Drive.
