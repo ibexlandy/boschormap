@@ -1,4 +1,4 @@
-Boschor Map – v1.10 (privates Projekt)
+Boschor Map – v1.11 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,10 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.11
+- Planungsfenster: Rückgängig · Speichern · Beenden als feste Fusszeile – nichts liegt mehr übereinander.
+- Fotos im Vollbild passen ganz ins Fenster (Hochformat am PC nicht mehr oben und unten abgeschnitten).
 
 NEU IN v1.10
 - Planen ganz im Planungsfenster (keine Leiste oben mehr): Art, Linie (Skiroute / am Weg / Luftlinie), unten fest
