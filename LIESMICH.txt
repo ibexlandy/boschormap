@@ -1,4 +1,4 @@
-Boschor Map – v1.3 (privates Projekt)
+Boschor Map – v1.4 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,15 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.4
+- Fotos: Import auch ohne Aufnahmeort (Android entfernt ihn beim Auswählen im Browser) – Ort wählbar:
+  aktueller Standort, Kartenmitte oder ein eigener Ort in der Nähe. Neuer Knopf «Foto aufnehmen» (Kamera,
+  Foto wird dem Standort zugeordnet). Fortschritt und Bestätigung beim Speichern von Fotos.
+- Wetter: Tagessymbol von MeteoSchweiz mit offiziellem Text (eigene Symbole, offline).
+- «Jetzt gemessen»: aktuelle Werte der nächsten SwissMetNet-Stationen (Temperatur, Wind, Böen, Niederschlag,
+  Schneehöhe), mit Messzeit; ohne Netz der zuletzt geholte Stand.
+- Reiter «Ideen»: Wettersymbol-Text für Samstag und Sonntag.
 
 NEU IN v1.3
 - Reiter «Wochenende» heisst neu «Ideen» (mit Glühbirnen-Symbol).

@@ -138,38 +138,55 @@ async function exifInfo(file){const out={ll:null,date:"",time:0};try{const buf=a
       const mm=dt.match(/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/);if(mm&&mm[1]>"1990"){out.date=`${mm[1]}-${mm[2]}-${mm[3]}`;out.time=new Date(+mm[1],+mm[2]-1,+mm[3],+mm[4],+mm[5]).getTime();}break;}
     o+=2+len;}}catch(e){}return out;}
 function photoImportStart(){return {title:"Fotos importieren",icon:`<svg><use href="#i-cam"/></svg>`,html:`
-  <p class="muted">Nur Fotos mit Aufnahmeort werden übernommen. Fotos vom gleichen Ort und Tag werden zusammengefasst; liegt ein eigener Ort in der Nähe (bis 150 m), werden sie dort angehängt.</p>
+  <p class="muted">Fotos vom gleichen Ort und Tag werden zusammengefasst; liegt ein eigener Ort in der Nähe (bis 150 m), werden sie dort angehängt.</p>
+  <div class="note">Auf dem Handy entfernt Android beim Auswählen im Browser meist den Aufnahmeort aus den Fotos. Dann wählst du den Ort selbst: aktueller Standort, Kartenmitte oder ein eigener Ort. Am PC bleibt der Aufnahmeort erhalten.</div>
   <label class="tg card"><span>Einfacher Modus<br><small class="muted">nur eine Bemerkung pro Ort, Name und Kategorie automatisch</small></span><span class="sw2"><input type="checkbox" id="piS"${ls("phSimple")==="1"?" checked":""}><i></i></span></label>
-  <div class="btns"><button class="btn pri" id="piF"><svg><use href="#i-cam"/></svg>Fotos auswählen</button><button class="btn" id="piD">Ganzen Ordner wählen</button></div>`,
-  after(P){$("#piS",P).onchange=e=>ls("phSimple",e.target.checked?"1":"0");const go=inp=>{inp.onchange=()=>{const fl=[...inp.files].filter(f=>/^image\/jpe?g$/.test(f.type)||/\.jpe?g$/i.test(f.name));inp.value="";if(fl.length)scanPhotos(fl);else toast("Keine JPEG-Fotos gefunden");};inp.click();};
-    $("#piF",P).onclick=()=>go($("#fPhotos"));$("#piD",P).onclick=()=>go($("#fFolder"));}};}
-async function scanPhotos(files){const seen=new Set(await metaGet("photoSrc",[]));const rows=[];let noGps=0,dup=0;
+  <div class="btns"><button class="btn pri" id="piC"><svg><use href="#i-cam"/></svg>Foto aufnehmen</button><button class="btn" id="piF">Fotos auswählen</button><button class="btn" id="piD">Ganzen Ordner wählen</button></div>`,
+  after(P){$("#piS",P).onchange=e=>ls("phSimple",e.target.checked?"1":"0");const go=inp=>{inp.onchange=()=>{const fl=[...inp.files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));inp.value="";if(fl.length)scanPhotos(fl);else toast("Keine Fotos gefunden");};inp.click();};
+    $("#piC",P).onclick=()=>{locateOnce();go($("#fCam"));};$("#piF",P).onclick=()=>{locateOnce();go($("#fPhotos"));};$("#piD",P).onclick=()=>go($("#fFolder"));}};}
+/* aktueller Standort einmal holen (für Fotos ohne Aufnahmeort) */
+let locP=null;function locateOnce(){if(S.me&&Date.now()-(S.meT||0)<120000)return Promise.resolve(S.me);if(locP)return locP;
+  locP=new Promise(res=>{if(!navigator.geolocation)return res(null);navigator.geolocation.getCurrentPosition(p=>{S.me={lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};S.meT=Date.now();res(S.me);},()=>res(null),{enableHighAccuracy:true,timeout:15000,maximumAge:60000});}).finally(()=>{setTimeout(()=>{locP=null;},1000);});return locP;}
+async function scanPhotos(files){const seen=new Set(await metaGet("photoSrc",[]));const rows=[],noLoc=[];let dup=0;
   for(let i=0;i<files.length;i++){if(i%4===0)progress("Fotos lesen",i,files.length,"Aufnahmeort und -zeit …");const f=files[i];const key=f.name+"|"+f.size+"|"+f.lastModified;if(seen.has(key)){dup++;continue;}
-    const ex=await exifInfo(f);if(!ex.ll){noGps++;continue;}rows.push({f,ex,key});}
+    const ex=await exifInfo(f);if(!ex.time)ex.time=f.lastModified||Date.now();if(!ex.date){const d=new Date(ex.time);ex.date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+    (ex.ll?rows:noLoc).push({f,ex,key});}
   progressDone();rows.sort((a,b)=>a.ex.time-b.ex.time);const groups=[];
-  for(const r of rows){let g=groups.find(g=>g.date===r.ex.date&&distM(g.lat,g.lon,r.ex.ll[0],r.ex.ll[1])<80);if(!g){g={date:r.ex.date,lat:r.ex.ll[0],lon:r.ex.ll[1],rows:[]};groups.push(g);}g.rows.push(r);
+  for(const r of rows){let g=groups.find(g=>!g.noLoc&&g.date===r.ex.date&&distM(g.lat,g.lon,r.ex.ll[0],r.ex.ll[1])<80);if(!g){g={date:r.ex.date,lat:r.ex.ll[0],lon:r.ex.ll[1],rows:[]};groups.push(g);}g.rows.push(r);
     g.lat=g.rows.reduce((s,x)=>s+x.ex.ll[0],0)/g.rows.length;g.lon=g.rows.reduce((s,x)=>s+x.ex.ll[1],0)/g.rows.length;}
-  for(const g of groups){let b=null;for(const p of S.points){if(p.del)continue;const d=distM(g.lat,g.lon,p.lat,p.lon);if(d<=150&&(!b||d<b.d))b={p,d};}g.target=b?b.p.id:"";g.near=b;}
-  if(!groups.length)return toast(`Keine neuen Fotos mit Aufnahmeort (${noGps} ohne Ort, ${dup} schon übernommen)`,5000);
-  const simple=ls("phSimple")==="1";const urls=[];
-  openPanel(()=>({title:`${groups.length} Orte aus ${rows.length} Fotos`,icon:`<svg><use href="#i-cam"/></svg>`,html:`
-   ${noGps||dup?`<p class="muted small">${noGps?noGps+" Fotos ohne Aufnahmeort übersprungen. ":""}${dup?dup+" schon übernommen.":""}</p>`:""}
+  for(const g of groups){let b=null;for(const p of S.points){if(p.del)continue;const d=distM(g.lat,g.lon,p.lat,p.lon);if(d<=150&&(!b||d<b.d))b={p,d};}g.near=b;}
+  /* Fotos ohne Aufnahmeort: pro Tag eine Gruppe, Ort wählbar (Standort, Kartenmitte, eigener Ort) */
+  let me=null;if(noLoc.length){progress("Standort bestimmen",0,0,"für Fotos ohne Aufnahmeort …");me=await locateOnce();progressDone();}
+  const c=map.getCenter();const ref=me||c;const nearRef=S.points.filter(p=>!p.del).map(p=>({p,d:distM(ref.lat,ref.lon,p.lat,p.lon)})).filter(x=>x.d<3000).sort((a,b)=>a.d-b.d).slice(0,8);
+  const days=[...new Set(noLoc.map(r=>r.ex.date))].sort();
+  for(const d of days){const rs=noLoc.filter(r=>r.ex.date===d);const fresh=rs.some(r=>Date.now()-r.ex.time<3*3600e3);
+    let def=me&&fresh?"me":"skip";if(def==="me"&&nearRef[0]&&nearRef[0].d<=150&&me)def=nearRef[0].p.id;groups.push({date:d,rows:rs,noLoc:true,def});}
+  if(!groups.length)return toast(dup?`Alle ${dup} Fotos sind schon übernommen`:"Keine Fotos gefunden",4000);
+  const simple=ls("phSimple")==="1";const urls=[];const nPhotos=rows.length+noLoc.length;
+  const opt=g=>g.noLoc?`<option value="skip"${g.def==="skip"?" selected":""}>Überspringen</option>${me?`<option value="me"${g.def==="me"?" selected":""}>Neuer Ort am aktuellen Standort (±${fmtN(me.acc||0)} m)</option>`:""}<option value="map">Neuer Ort in der Kartenmitte</option>
+      ${nearRef.map(x=>`<option value="${x.p.id}"${g.def===x.p.id?" selected":""}>an «${esc(x.p.name)}» anhängen (${fmtN(x.d)} m)</option>`).join("")}`
+    :`<option value="">Neuer Ort</option>${g.near?`<option value="${g.near.p.id}" selected>an «${esc(g.near.p.name)}» anhängen (${fmtN(g.near.d)} m)</option>`:""}`;
+  const isNew=v=>v===""||v==="me"||v==="map";
+  openPanel(()=>({title:`${nPhotos} Fotos`,icon:`<svg><use href="#i-cam"/></svg>`,html:`
+   ${dup?`<p class="muted small">${dup} schon übernommen.</p>`:""}
+   ${noLoc.length?`<div class="note">${noLoc.length} Foto${noLoc.length>1?"s":""} ohne Aufnahmeort${me?"":" – Standort nicht verfügbar (Standort im Browser erlauben)"}. Bitte unten den Ort wählen.</div>`:""}
    ${groups.map((g,i)=>`<div class="card"><div class="thumbs">${g.rows.slice(0,6).map((r,k)=>`<img data-g="${i}" data-k="${k}" alt="">`).join("")}${g.rows.length>6?`<span class="muted">+${g.rows.length-6}</span>`:""}</div>
-     <div class="muted small">${fmtDate(g.date)} · ${g.rows.length} Fotos</div>
-     <select class="inp" data-t="${i}" style="margin-top:6px"><option value="">Neuer Ort</option>${g.near?`<option value="${g.near.p.id}" selected>an «${esc(g.near.p.name)}» anhängen (${fmtN(g.near.d)} m)</option>`:""}</select>
-     ${simple?"":`<div class="row" data-new="${i}" style="margin-top:6px${g.target?";display:none":""}"><input class="inp grow" data-n="${i}" placeholder="Name"><select class="inp" data-c="${i}" style="width:auto">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k==="ort"?" selected":""}>${c.n}</option>`).join("")}</select></div>`}
+     <div class="muted small">${fmtDate(g.date)} · ${g.rows.length} Foto${g.rows.length>1?"s":""}${g.noLoc?" · <b>ohne Aufnahmeort</b>":""}</div>
+     <select class="inp" data-t="${i}" style="margin-top:6px">${opt(g)}</select>
+     ${simple?"":`<div class="row" data-new="${i}" style="margin-top:6px${(g.noLoc?isNew(g.def):!g.near)?"":";display:none"}"><input class="inp grow" data-n="${i}" placeholder="Name"><select class="inp" data-c="${i}" style="width:auto">${Object.entries(CATS).map(([k,c])=>`<option value="${k}"${k==="ort"?" selected":""}>${c.n}</option>`).join("")}</select></div>`}
      <input class="inp" data-b="${i}" placeholder="Bemerkung" style="margin-top:6px"></div>`).join("")}
    <button class="btn pri full" id="phGo"><svg><use href="#i-check"/></svg>Übernehmen</button>`,
    after(P){$$("img[data-g]",P).forEach(im=>{const r=groups[+im.dataset.g].rows[+im.dataset.k];const u=URL.createObjectURL(r.f);urls.push(u);im.src=u;im.loading="lazy";});
-     $$("[data-t]",P).forEach(s=>s.onchange=()=>{const n=$(`[data-new="${s.dataset.t}"]`,P);if(n)n.style.display=s.value?"none":"";});
-     $("#phGo",P).onclick=async()=>{const N=rows.length;let k=0;const newPts=[];
-       for(let i=0;i<groups.length;i++){const g=groups[i];const tgt=$(`[data-t="${i}"]`,P).value;const rem=$(`[data-b="${i}"]`,P).value.trim();
-         let p=tgt?S.points.find(x=>x.id===tgt):null;
-         if(!p){const nm=simple?"":($(`[data-n="${i}"]`,P).value.trim());const cat=simple?"ort":$(`[data-c="${i}"]`,P).value;
-           p={id:uid(),cat,name:nm||(rem?rem.slice(0,40):`Foto ${fmtDate(g.date)}`),lat:g.lat,lon:g.lon,hoehe:null,hq:"",visits:cat==="gipfel"&&g.date?[{d:g.date,note:""}]:[],photos:[],note:rem,rate:{},created:Date.now()};newPts.push(p);}
+     $$("[data-t]",P).forEach(s=>s.onchange=()=>{const n=$(`[data-new="${s.dataset.t}"]`,P);if(n)n.style.display=isNew(s.value)?"":"none";});
+     $("#phGo",P).onclick=async()=>{const N=groups.reduce((s,g)=>s+g.rows.length,0);let k=0,bad=0,done=0;const newPts=[];const cc=map.getCenter();
+       for(let i=0;i<groups.length;i++){const g=groups[i];const tgt=$(`[data-t="${i}"]`,P).value;const rem=$(`[data-b="${i}"]`,P).value.trim();if(tgt==="skip"){k+=g.rows.length;continue;}
+         let p=isNew(tgt)?null:S.points.find(x=>x.id===tgt);
+         if(!p){const ll=tgt==="me"?[me.lat,me.lon]:tgt==="map"?[cc.lat,cc.lon]:[g.lat,g.lon];const nm=simple?"":($(`[data-n="${i}"]`,P).value.trim());const cat=simple?"ort":$(`[data-c="${i}"]`,P).value;
+           p={id:uid(),cat,name:nm||(rem?rem.slice(0,40):`Foto ${fmtDate(g.date)}`),lat:ll[0],lon:ll[1],hoehe:null,hq:"",visits:cat==="gipfel"&&g.date?[{d:g.date,note:""}]:[],photos:[],note:rem,rate:{},created:Date.now()};newPts.push(p);}
          else if(rem)p.note=(p.note?p.note+"\n":"")+`${fmtDate(g.date)}: ${rem}`;
-         for(const r of g.rows){k++;progress("Fotos übernehmen",k,N);try{const id=await storePhoto(r.f,p.id,r.ex);p.photos=(p.photos||[]).concat(id);seen.add(r.key);}catch(e){}}
-         await savePoint(p);}
+         for(const r of g.rows){k++;progress("Fotos übernehmen",k,N);try{const id=await storePhoto(r.f,p.id,r.ex);p.photos=(p.photos||[]).concat(id);seen.add(r.key);done++;}catch(e){bad++;}}
+         if((p.photos||[]).length||!newPts.includes(p))await savePoint(p);}
        await metaSet("photoSrc",[...seen]);urls.forEach(u=>URL.revokeObjectURL(u));
-       if(navigator.onLine)for(let i=0;i<newPts.length;i++){progress("Höhen holen (swisstopo)",i,newPts.length);const p=newPts[i];const h=await heightAt(p.lat,p.lon);if(h!=null){p.hoehe=h;p.hq="swisstopo";await savePoint(p);}await sleep(250);}
-       progressDone();closePanel();toast(`${N} Fotos übernommen`);};}}));}
+       if(navigator.onLine)for(let i=0;i<newPts.length;i++){const p=newPts[i];if(!(p.photos||[]).length)continue;progress("Höhen holen (swisstopo)",i,newPts.length);const h=await heightAt(p.lat,p.lon);if(h!=null){p.hoehe=h;p.hq="swisstopo";await savePoint(p);}await sleep(250);}
+       progressDone();closePanel();toast(bad?`${done} Fotos übernommen, ${bad} nicht lesbar (Format HEIF? In der Samsung-Kamera «Bilder mit hoher Effizienz» ausschalten)`:`${done} Fotos übernommen`,bad?7000:3000);
+       const np=newPts.find(p=>(p.photos||[]).length);if(np&&groups.length===1)showPoint(np.id);};}}));}

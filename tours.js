@@ -297,7 +297,7 @@ function weekendPanel(){if(!wf)wf=lsJ("wf",{arts:[],maxH:0,maxKm:0,from:"home",d
      $$("#wL .li",P).forEach(b=>b.onclick=()=>showTour(b.dataset.id));
      for(const x of L.slice(0,30)){const t=x.t;const top=t.prof&&t.prof.length?t.prof.reduce((m,p)=>p.h>m.h?p:m,t.prof[0]):{lat:t.disp[0][0],lon:t.disp[0][1],h:t.emax};
        const [w,b]=await Promise.all([weatherAt(top.lat,top.lon,top.h||t.emax),/ski|winter/.test(t.art)?bulletinAt(top.lat,top.lon):null]);const el=$(".wx-"+t.id,P);if(!el)continue;
-       const parts=[];if(b&&b.level)parts.push(`Lawinengefahr ${b.level}${b.sub||""}`);if(w){for(const d of sat){const day=w.days.find(z=>z.date===d.date);if(day)parts.push(`${d.n}: ${fmtN(day.tn)}…${fmtN(day.tx)}°, ${fmtN(day.rr,1)} mm`);}}
+       const parts=[];if(b&&b.level)parts.push(`Lawinengefahr ${b.level}${b.sub||""}`);if(w){for(const d of sat){const day=w.days.find(z=>z.date===d.date);if(day)parts.push(`${d.n}: ${day.sy?wxText(day.sy)+", ":""}${fmtN(day.tn)}…${fmtN(day.tx)}°, ${fmtN(day.rr,1)} mm`);}}
        el.textContent=parts.join(" · ");}}};}
 function nextWeekend(){const d=new Date();const out=[];for(let i=0;i<8&&out.length<2;i++){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate()+i);const wd=x.getDay();if(wd===6||wd===0)out.push({date:`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,n:wd===6?"Sa":"So"});}return out;}
 

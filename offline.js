@@ -162,27 +162,81 @@ async function fetchWeather(onStep){const its=await (await fetch(STAC+"/items?li
   if(!item)throw new Error("Zurzeit keine vollständige Prognose verfügbar – später nochmals versuchen");
   let meta=await metaGet("wxmeta",null);if(!meta||Date.now()-meta.t>30*864e5){onStep&&onStep("Prognosepunkte");const tx=await fetchText1252("https://data.geo.admin.ch/ch.meteoschweiz.ogd-local-forecasting/ogd-local-forecasting_meta_point.csv");
     const rows=tx.split(/\r?\n/).slice(1).map(l=>l.split(";")).filter(c=>c.length>13);meta={t:Date.now(),p:rows.map(c=>[+c[0],c[4],+c[9],+c[12],+c[13],c[5]==="Station"?"S":c[5]==="Point of Interest"?"P":"O"])};await metaSet("wxmeta",meta);}
-  const idx=new Map(meta.p.map((p,i)=>[p[0],i]));const par={tx:"tre200dx",tn:"tre200dn",rr:"rka150d0"};const dates=new Set();const raw={};
-  for(const [k,p] of Object.entries(par)){onStep&&onStep(k==="tx"?"Höchsttemperatur":k==="tn"?"Tiefsttemperatur":"Niederschlag");const key=ks.find(x=>x.includes("."+run+".")&&x.includes("."+p+"."));if(!key)throw new Error("Prognose unvollständig ("+p+")");
+  const idx=new Map(meta.p.map((p,i)=>[p[0],i]));const par={tx:"tre200dx",tn:"tre200dn",rr:"rka150d0",sy:"jp2000d0"};const dates=new Set();const raw={};
+  for(const [k,p] of Object.entries(par)){onStep&&onStep({tx:"Höchsttemperatur",tn:"Tiefsttemperatur",rr:"Niederschlag",sy:"Wettersymbol"}[k]);const key=ks.find(x=>x.includes("."+run+".")&&x.includes("."+p+"."));
+    if(!key){if(k==="sy"){raw.sy=new Map();continue;}throw new Error("Prognose unvollständig ("+p+")");}
     const tx=await fetchText1252(item.assets[key].href);const m=new Map();for(const l of tx.split(/\r?\n/).slice(1)){const c=l.split(";");if(c.length<4)continue;const d=c[2].slice(0,8);dates.add(d);
       const v=parseFloat(c[3]);(m.get(+c[0])||m.set(+c[0],{}).get(+c[0]))[d]=isFinite(v)?v:null;}raw[k]=m;}
-  const D=[...dates].sort();const v={tx:[],tn:[],rr:[]};for(const p of meta.p){for(const k of ["tx","tn","rr"]){const m=raw[k].get(p[0])||{};v[k].push(D.map(d=>m[d]!=null?m[d]:null));}}
+  const D=[...dates].sort();const v={tx:[],tn:[],rr:[],sy:[]};for(const p of meta.p){for(const k of ["tx","tn","rr","sy"]){const m=raw[k].get(p[0])||{};v[k].push(D.map(d=>m[d]!=null?m[d]:null));}}
   wxMem={t:Date.now(),run,dates:D.map(d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`),v};await metaSet("wx",wxMem);return wxMem;}
 async function weatherAt(lat,lon,h){if(!wxMem)wxMem=await metaGet("wx",null);const meta=await getWxMeta();if(!wxMem||!meta)return null;
   const c=meta.p.map((p,i)=>({i,p,d:distM(lat,lon,p[3],p[4])/1000})).filter(x=>x.d<20).sort((a,b)=>a.d-b.d).slice(0,12);if(!c.length)return null;
   const best=h?c.reduce((m,x)=>(x.d+Math.abs(x.p[2]-h)/150<m.d+Math.abs(m.p[2]-h)/150?x:m),c[0]):c[0];const i=best.i;const td=today();
-  return {name:best.p[1],h:best.p[2],dist:best.d,t:wxMem.t,run:wxMem.run,days:wxMem.dates.map((d,k)=>({date:d,tx:wxMem.v.tx[i][k],tn:wxMem.v.tn[i][k],rr:wxMem.v.rr[i][k]})).filter(x=>x.date>=td&&x.tx!=null)};}
+  return {name:best.p[1],h:best.p[2],dist:best.d,t:wxMem.t,run:wxMem.run,days:wxMem.dates.map((d,k)=>({date:d,tx:wxMem.v.tx[i][k],tn:wxMem.v.tn[i][k],rr:wxMem.v.rr[i][k],sy:wxMem.v.sy&&wxMem.v.sy[i]?wxMem.v.sy[i][k]:null})).filter(x=>x.date>=td&&x.tx!=null)};}
 let wxMetaMem=null;async function getWxMeta(){if(!wxMetaMem)wxMetaMem=await metaGet("wxmeta",null);return wxMetaMem;}
 const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
+/* Wettersymbole von MeteoSchweiz: Nummer → Text (offizielle Liste); gezeichnet mit eigenen Symbolen */
+const WXT=["","sonnig","ziemlich sonnig","teilweise sonnig","wechselnd bewölkt","bedeckt","Aufhellungen, einzelne Regenschauer","Aufhellungen, einzelne Regen- oder Schneeschauer","Aufhellungen, einzelne Schneeschauer",
+ "bewölkt, einige Regenschauer","bewölkt, einige Regen- oder Schneeschauer","bewölkt, einige Schneeschauer","Aufhellungen, leicht gewitterhaft","Aufhellungen und gewitterhaft","stark bewölkt, schwacher Regen",
+ "stark bewölkt, schwacher Schnee oder Regen","stark bewölkt, schwacher Schnee","stark bewölkt, zeitweise Regen","stark bewölkt, zeitweise Schnee oder Regen","stark bewölkt, zeitweise Schnee","stark bewölkt, anhaltender Regen",
+ "stark bewölkt, anhaltender Regen oder Schnee","stark bewölkt, anhaltender Schnee","stark bewölkt, leicht gewitterhaft","stark bewölkt, gewitterhaft","stark bewölkt, stark gewitterhaft","Hohe Bewölkung","Hochnebel","Nebel",
+ "leicht bewölkt, einzelne Regenschauer","leicht bewölkt, leichter Schneefall","teilweise sonnig, einige Schnee- oder Regenschauer","teilweise sonnig, einige Regenschauer","bewölkt, häufige Regenschauer","bewölkt, häufige Schneeschauer",
+ "bedeckt und trocken","teilweise sonnig, gewitterhaft","teilweise sonnig, Gewitter und Schneeschauer","bewölkt, Gewitter und häufige Regenschauer","bewölkt, Gewitter und häufige Schneeschauer","stark bewölkt, leicht gewitterhaft",
+ "bewölkt, leicht gewitterhaft","stark bewölkt, Gewitter und häufige Schneeschauer"];
+const WXN={101:"klar",102:"leicht bewölkt",103:"zum Teil bewölkt",131:"leicht bewölkt, einige Schnee- oder Regenschauer",132:"leicht bewölkt, einige Regenschauer",136:"Aufhellungen, gewitterhaft",137:"leicht bewölkt, Gewitter und Schneeschauer"};
+const wxText=c=>{c=+c;if(!c)return "";if(c>100)return WXN[c]||WXT[c-100]||"";return WXT[c]||"";};
+function wxIcon(c,sz){const t=wxText(c).toLowerCase();if(!t)return "";sz=sz||34;const night=+c>100;
+  const thunder=/gewitter/.test(t),snow=/schnee/.test(t),rain=/regen/.test(t),fog=/nebel/.test(t)&&!/hochnebel/.test(t)||/hochnebel/.test(t);
+  const sunOnly=/^(sonnig|klar)$/.test(t),fewCl=/ziemlich sonnig|leicht bewölkt/.test(t),part=/teilweise|aufhellungen|zum teil|wechselnd|hohe bewölkung/.test(t),heavy=/stark bewölkt|bedeckt/.test(t);
+  const sunC=night?"#9aa4ad":"#f2b100";let g="";
+  const sun=(x,y,r)=>night?`<path d="M${x+r*0.4} ${y-r}a${r} ${r} 0 1 0 ${r*0.6} ${r*1.6}a${r*0.8} ${r*0.8} 0 0 1 ${-r*0.6} ${-r*1.6}z" fill="${sunC}"/>`:`<circle cx="${x}" cy="${y}" r="${r}" fill="${sunC}"/>`+[0,45,90,135,180,225,270,315].map(a=>{const q=a*Math.PI/180;return `<line x1="${x+Math.cos(q)*(r+2)}" y1="${y+Math.sin(q)*(r+2)}" x2="${x+Math.cos(q)*(r+5)}" y2="${y+Math.sin(q)*(r+5)}" stroke="${sunC}" stroke-width="2" stroke-linecap="round"/>`;}).join("");
+  const cloud=(x,y,s,col)=>`<path transform="translate(${x} ${y}) scale(${s})" d="M6 18h17a5 5 0 0 0 .6-10 7 7 0 0 0-13.3 2A4 4 0 0 0 6 18z" fill="${col}" stroke="#7b8792" stroke-width="${1/s}"/>`;
+  if(sunOnly)g=sun(20,20,8);
+  else if(fog){g=cloud(4,2,1.1,"#cfd6dc")+`<path d="M6 28h28M9 33h22" stroke="#9aa4ad" stroke-width="2.5" stroke-linecap="round"/>`;}
+  else{if(fewCl||part)g+=sun(14,13,6.5);g+=cloud(fewCl?10:part?7:4,fewCl?10:part?7:3,fewCl?0.95:1.15,heavy?"#b9c2ca":"#e8edf1");}
+  const y0=29;if(rain&&!thunder)g+=[12,19,26].map((x,i)=>i<(/schwach|einzelne|leicht/.test(t)?2:3)?`<line x1="${x}" y1="${y0}" x2="${x-2}" y2="${y0+6}" stroke="#1e88e5" stroke-width="2.2" stroke-linecap="round"/>`:"").join("");
+  if(snow)g+=[[rain?27:14,y0+3],[rain?33:23,y0+5],[30,y0+1]].slice(0,rain?1:/schwach|einzelne|leicht/.test(t)?2:3).map(([x,y])=>`<g stroke="#5c8fbf" stroke-width="1.6" stroke-linecap="round"><line x1="${x-3}" y1="${y}" x2="${x+3}" y2="${y}"/><line x1="${x-1.5}" y1="${y-2.6}" x2="${x+1.5}" y2="${y+2.6}"/><line x1="${x+1.5}" y1="${y-2.6}" x2="${x-1.5}" y2="${y+2.6}"/></g>`).join("");
+  if(thunder)g+=`<path d="M20 25l-4 8h4l-2 6 7-9h-4l2-5z" fill="#f2b100" stroke="#b07f00" stroke-width=".8"/>`;
+  return `<svg viewBox="0 0 40 40" style="width:${sz}px;height:${sz}px;stroke:none;fill:none" role="img" aria-label="${esc(wxText(c))}"><title>${esc(wxText(c))}</title>${g}</svg>`;}
 function weatherHTML(w){if(!w)return `<div class="card"><h3><svg><use href="#i-sun"/></svg>Wetter</h3><div class="muted">Noch keine Prognose gespeichert. Mit Netz «Jetzt aktualisieren» tippen.</div></div>`;
   const old=Date.now()-w.t>36*3600e3;
-  return `<div class="card"><h3><svg><use href="#i-sun"/></svg>Wetter</h3><p class="muted small">Prognosepunkt <b>${esc(w.name)}</b> (${fmtN(w.h)} m, ${fmtN(w.dist,1)} km entfernt) · gespeichert ${fmtDT(w.t)}</p>
+  return `<div class="card"><h3><svg><use href="#i-sun"/></svg>Prognose</h3><p class="muted small">Prognosepunkt <b>${esc(w.name)}</b> (${fmtN(w.h)} m, ${fmtN(w.dist,1)} km entfernt) · gespeichert ${fmtDT(w.t)}</p>
    ${old?`<div class="note">Die Prognose ist älter als 36 Stunden.</div>`:""}
-   <div class="wx">${w.days.map(d=>{const dt=new Date(d.date+"T12:00");const snow=d.rr>0.5&&d.tx<1.5;return `<div><b>${WD[dt.getDay()]} ${dt.getDate()}.${dt.getMonth()+1}.</b>
-     <svg style="width:20px;height:20px;color:${d.rr>0.5?"#1e88e5":"#e0a100"}"><use href="#i-${snow?"snow":d.rr>0.5?"cloud":"sun"}"/></svg><div>${fmtN(d.tn)}° / <b style="display:inline">${fmtN(d.tx)}°</b></div>
-     <div class="muted">${fmtN(d.rr,1)} mm</div><div class="rbar" style="width:${Math.min(100,d.rr*6)}%"></div></div>`;}).join("")}</div>
-   <p class="muted small">Quelle: MeteoSchweiz (Tageswerte). Symbole nur nach Niederschlag, keine Bewölkungsangabe.</p></div>`;}
+   <div class="wx">${w.days.map(d=>{const dt=new Date(d.date+"T12:00");const snow=d.rr>0.5&&d.tx<1.5;const ic=d.sy?wxIcon(d.sy,34):`<svg style="width:20px;height:20px;color:${d.rr>0.5?"#1e88e5":"#e0a100"}"><use href="#i-${snow?"snow":d.rr>0.5?"cloud":"sun"}"/></svg>`;
+     return `<div title="${esc(wxText(d.sy))}"><b>${WD[dt.getDay()]} ${dt.getDate()}.${dt.getMonth()+1}.</b>${ic}<div>${fmtN(d.tn)}° / <b style="display:inline">${fmtN(d.tx)}°</b></div>
+     <div class="muted">${fmtN(d.rr,1)} mm</div><div class="rbar" style="width:${Math.min(100,d.rr*6)}%"></div>${d.sy?`<div class="wxt">${esc(wxText(d.sy))}</div>`:""}</div>`;}).join("")}</div>
+   <p class="muted small">Quelle: MeteoSchweiz (Tageswerte, Symbol für den Tag).</p></div>`;}
 
+/* ---------- Jetzt gemessen: SwissMetNet-Stationen (10-Minuten-Werte von heute) ---------- */
+const SMN="https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn";
+async function smnStations(){let m=await metaGet("smnmeta",null);if(m&&Date.now()-m.t<30*864e5)return m;if(!navigator.onLine)return m;
+  const tx=await fetchText1252(SMN+"/ogd-smn_meta_stations.csv");const L=tx.split(/\r?\n/).filter(Boolean);const h=L[0].split(";").map(x=>x.replace(/"/g,""));
+  const ix=re=>h.findIndex(c=>re.test(c));const iA=ix(/^station_abbr$/),iN=ix(/^station_name$/),iH=ix(/height_masl/),iLa=ix(/wgs84_lat/),iLo=ix(/wgs84_lon/);
+  if(iA<0||iLa<0||iLo<0)throw new Error("Stationsliste unbekannt");
+  m={t:Date.now(),s:L.slice(1).map(l=>l.split(";").map(x=>x.replace(/^"|"$/g,""))).filter(c=>isFinite(+c[iLa])&&+c[iLa]>40).map(c=>({a:c[iA],n:iN>=0?c[iN]:c[iA],h:iH>=0?Math.round(+c[iH]):null,lat:+c[iLa],lon:+c[iLo]}))};
+  await metaSet("smnmeta",m);return m;}
+function pickStations(list,lat,lon,h){const c=list.map(s=>Object.assign({d:distM(lat,lon,s.lat,s.lon)/1000},s)).filter(s=>s.d<35).sort((a,b)=>a.d-b.d);const out=c.slice(0,2);
+  if(h){const b=c.slice(0,12).reduce((m,x)=>!m||Math.abs(x.h-h)<Math.abs(m.h-h)?x:m,null);if(b&&!out.includes(b))out.push(b);}else if(c[2])out.push(c[2]);return out;}
+async function smnNow(abbr){const a=abbr.toLowerCase();let href=`${SMN}/${a}/ogd-smn_${a}_t_now.csv`;let r=await fetch(href,{cache:"no-store"});
+  if(!r.ok){const it=await (await fetch(`https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-smn/items/${a}`,{cache:"no-store"})).json();const k=Object.keys(it.assets||{}).find(x=>/_t_now\.csv$/.test(x));if(!k)throw new Error("keine aktuellen Werte");href=it.assets[k].href;r=await fetch(href,{cache:"no-store"});}
+  const tx=await r.text();const L=tx.split(/\r?\n/).filter(Boolean);const hd=L[0].split(";");const rows=L.slice(1).map(l=>l.split(";"));const col=k=>hd.indexOf(k);
+  const num=(row,k)=>{const i=col(k);if(i<0)return null;const v=parseFloat(row[i]);return isFinite(v)?v:null;};
+  const full=rows.filter(rw=>num(rw,"tre200s0")!=null);const last=full[full.length-1];if(!last)throw new Error("keine aktuellen Werte");
+  const ts=(last[col("reference_timestamp")]||"").match(/(\d+)\.(\d+)\.(\d+) (\d+):(\d+)/);const t=ts?Date.UTC(+ts[3],+ts[2]-1,+ts[1],+ts[4],+ts[5]):Date.now();
+  const lastN=k=>{for(let i=rows.length-1;i>=0;i--){const v=num(rows[i],k);if(v!=null)return v;}return null;};
+  const li=rows.indexOf(last);let rr=0,any=false;for(let i=Math.max(0,li-5);i<=li;i++){const v=num(rows[i],"rre150z0");if(v!=null){rr+=v;any=true;}}
+  return {t,ta:num(last,"tre200s0"),rh:num(last,"ure200s0"),ff:num(last,"fu3010z0"),fx:num(last,"fu3010z1"),dd:num(last,"dkl010z0"),rr:any?Math.round(rr*10)/10:null,hs:lastN("htoauts0"),sun:num(last,"sre000z0")};}
+async function nowCached(){return (await metaGet("smnnow",null))||{};}
+async function fetchNowFor(sts){const cache=await nowCached();await Promise.all(sts.map(async s=>{try{cache[s.a]=Object.assign(await smnNow(s.a),{fetched:Date.now()});}catch(e){}}));await metaSet("smnnow",cache);return cache;}
+const DIRS=["N","NO","O","SO","S","SW","W","NW"];const dirTxt=d=>d==null?"":DIRS[Math.round(d/45)%8];
+function nowHTML(sts,cache,loading){if(!sts)return `<div class="card"><h3><svg><use href="#i-gauge"/></svg>Jetzt gemessen</h3><div class="muted">${navigator.onLine?"Stationen werden geladen …":"Stationsliste noch nicht gespeichert (einmal mit Netz öffnen)."}</div></div>`;
+  if(!sts.length)return `<div class="card"><h3><svg><use href="#i-gauge"/></svg>Jetzt gemessen</h3><div class="muted">Keine Messstation im Umkreis von 35 km.</div></div>`;
+  return `<div class="card"><h3><svg><use href="#i-gauge"/></svg>Jetzt gemessen${loading?` <small class="muted">· wird aktualisiert …</small>`:""}</h3>${sts.map(s=>{const v=cache[s.a];const age=v?Math.round((Date.now()-v.t)/60000):null;
+    return `<div class="q"><div class="grow"><b>${esc(s.n)}</b> <small class="muted">${s.h!=null?fmtN(s.h)+" m · ":""}${fmtN(s.d,1)} km</small><br>
+     ${v?`<span style="font-size:17px;font-weight:700;color:var(--nacht)">${v.ta!=null?fmtN(v.ta,1)+" °C":"–"}</span>
+      <small>${v.ff!=null?` · Wind ${fmtN(v.ff)} km/h ${dirTxt(v.dd)}${v.fx!=null?`, Böen ${fmtN(v.fx)}`:""}`:""}${v.rr!=null?` · ${fmtN(v.rr,1)} mm/h`:""}${v.hs!=null?` · Schnee ${fmtN(v.hs)} cm`:""}${v.rh!=null?` · ${fmtN(v.rh)} % Feuchte`:""}</small>
+      <br><small class="${age>90?"st-err":"muted"}">gemessen ${fmtDT(v.t)}${age!=null?` (vor ${age<120?age+" min":fmtN(age/60,1)+" h"})`:""}</small>`:`<small class="muted">noch keine Werte gespeichert</small>`}</div></div>`;}).join("")}
+   <p class="muted small">Quelle: MeteoSchweiz (SwissMetNet, 10-Minuten-Werte).</p></div>`;}
 /* ---------- Bulletin und Wetter zusammen holen ---------- */
 async function fetchConditions(){let ok=0;progress("Lawinenbulletin laden",0,0,"SLF");try{await fetchBulletin();ok++;}catch(e){toast("Bulletin: "+e.message,4000);}
   try{await fetchWeather(s=>progress("Wetter laden",0,0,"MeteoSchweiz: "+s));ok++;}catch(e){toast("Wetter: "+e.message,4000);}progressDone();if(ok===2)toast("Bulletin und Wetter gespeichert");ls("condT",Date.now());}

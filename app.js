@@ -181,7 +181,9 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(!p)return {
    <p class="muted small">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</p>`,
    async after(P){if(ph.length){const ims=$$("#pThumbs img",P);for(let i=0;i<ph.length;i++){thumbURL(ph[i]).then(u=>{ims[i].src=u;});ims[i].onclick=()=>showGallery(ph,i);}}
      $("#pEd",P).onclick=()=>openPanel(()=>editPointPanel(p,false));
-     $("#pPh",P).onclick=()=>{const f=$("#fPtPhoto");f.onchange=async()=>{const fl=[...f.files];f.value="";if(!fl.length)return;for(const x of fl){const id=await storePhoto(x,p.id);p.photos=(p.photos||[]).concat(id);}await savePoint(p);refreshPanel();};f.click();};
+     $("#pPh",P).onclick=()=>{const f=$("#fPtPhoto");f.onchange=async()=>{const fl=[...f.files];f.value="";if(!fl.length)return;let n=0,bad=0;
+         for(const x of fl){progress("Fotos speichern",n,fl.length);try{const id=await storePhoto(x,p.id);p.photos=(p.photos||[]).concat(id);n++;}catch(e){bad++;}}
+         progressDone();if(n)await savePoint(p);toast(bad?`${n} gespeichert, ${bad} nicht lesbar (Format HEIF? In der Samsung-Kamera «Bilder mit hoher Effizienz» ausschalten)`:`${n} Foto${n>1?"s":""} gespeichert`,bad?7000:2500);refreshPanel();};f.click();};
      $("#pPl",P).onclick=()=>{closePanel();startPlan({start:[p.lat,p.lon],pid:p.id});};
      $("#pWx",P).onclick=()=>openPanel(()=>conditionsPanel(p.lat,p.lon,p.hoehe,p.name));
      $("#pDel",P).onclick=async()=>{if(!confirm(`«${p.name}» löschen? (bleibt 30 Tage im Papierkorb)`))return;p.del=Date.now();await savePoint(p);closePanel();toast("Gelöscht – im Papierkorb");};
@@ -306,10 +308,12 @@ function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",h
 
 /* ---------- Bedingungen (Bulletin + Wetter) für einen Ort ---------- */
 async function conditionsPanel(lat,lon,h,name){const b=await bulletinAt(lat,lon);const w=await weatherAt(lat,lon,h);
-  return {title:name||"Bedingungen",icon:`<svg><use href="#i-sun"/></svg>`,html:bulletinHTML(b,h)+weatherHTML(w)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
+  let st=null;try{const m=await smnStations();if(m)st=pickStations(m.s,lat,lon,h);}catch(e){}const nc=await nowCached();
+  return {title:name||"Bedingungen",icon:`<svg><use href="#i-sun"/></svg>`,html:`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+weatherHTML(w)+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
    <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a><a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a>
    <a class="btn" href="https://www.skitourenguru.ch/" target="_blank" rel="noopener">Skitourenguru</a></div>`,
-   after(P){$("#cUpd",P).onclick=async()=>{if(!navigator.onLine)return toast("Kein Internet");await fetchConditions();refreshPanel();};bindBulletin(P);}};}
+   async after(P){$("#cUpd",P).onclick=async()=>{if(!navigator.onLine)return toast("Kein Internet");await fetchConditions();refreshPanel();};bindBulletin(P);
+     if(navigator.onLine){try{if(!st){const m=await smnStations();st=m?pickStations(m.s,lat,lon,h):[];}const c=await fetchNowFor(st);const box=$("#nowBox",P);if(box&&P.contains(box))box.innerHTML=nowHTML(st,c,false);}catch(e){const box=$("#nowBox",P);if(box)box.innerHTML=nowHTML(st,nc,false);}}}};}
 
 /* ---------- Start ---------- */
 async function bootApp(){if(gdPopupReturn())return;
