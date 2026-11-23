@@ -1,135 +1,82 @@
-/* Boschor Map – eigene, schlanke Kartenanzeige (Web Mercator, 256-px-Kacheln).
-   Kacheln als <img>, Linien auf einem Canvas, Punkte als DOM-Elemente.
-   Bedienung: ziehen, zwei Finger (Pinch), Mausrad, Doppelklick, langes Drücken. */
+/* Boschor Map – GPX lesen, Track bereinigen (Ausreisser, Pausen), Kennzahlen, persönliches Tempo */
 "use strict";
-const BMap=(()=>{
-const TS=256,R=Math.PI/180;
-const lonX=lon=>(lon+180)/360;
-const latY=lat=>{const s=Math.sin(Math.max(-85,Math.min(85,lat))*R);return 0.5-Math.log((1+s)/(1-s))/(4*Math.PI);};
-const xLon=x=>x*360-180;
-const yLat=y=>90-360*Math.atan(Math.exp((y-0.5)*2*Math.PI))/Math.PI;
+function parseGPX(text){const d=new DOMParser().parseFromString(text,"application/xml");if(d.getElementsByTagName("parsererror").length)throw new Error("Keine gültige GPX-Datei");
+  const val=(el,tag)=>{const x=el.getElementsByTagName(tag)[0];return x?x.textContent.trim():"";};
+  let nodes=[...d.getElementsByTagName("trkpt")];if(!nodes.length)nodes=[...d.getElementsByTagName("rtept")];
+  const pts=[];for(const n of nodes){const la=parseFloat(n.getAttribute("lat")),lo=parseFloat(n.getAttribute("lon"));if(!isFinite(la)||!isFinite(lo))continue;
+    const e=parseFloat(val(n,"ele"));const ts=val(n,"time");const t=ts?Date.parse(ts):NaN;pts.push([la,lo,isFinite(e)?e:null,isFinite(t)?t:null]);}
+  const trk=d.getElementsByTagName("trk")[0]||d.getElementsByTagName("rte")[0];
+  const name=trk?val(trk,"name"):"",type=trk?val(trk,"type"):"",meta=val(d.documentElement,"name");
+  return {pts,name:name||meta,type};}
+function guessArt(s){s=String(s||"").toLowerCase();
+  if(/ski|splitboard|randonn/.test(s))return "skitour";if(/gravel/.test(s))return "gravel";if(/mtb|mountain ?bik|enduro|bike|downhill/.test(s))return "bike";
+  if(/cycl|velo|rad|road/.test(s))return "gravel";if(/mountaineer|alpin|climb|hochtour|kletter/.test(s))return "hochtour";if(/hik|walk|trek|wander|run|trail|lauf/.test(s))return "wandern";return "";}
 
-class TileLayer{
-  constructor(o){this.o=Object.assign({min:0,max:19,opacity:1,z:1},o);this.tiles=new Map();this.el=document.createElement("div");
-    this.el.className="bm-tl";this.el.style.zIndex=this.o.z;this.el.style.opacity=this.o.opacity;this.tz=-1;this.map=null;}
-  url(z,x,y){return this.o.url.replace("{z}",z).replace("{x}",x).replace("{y}",y);}
-  setOpacity(v){this.o.opacity=v;this.el.style.opacity=v;}
-  mk(z,x,y,k){const d=document.createElement("div");d.className="bm-t";const im=new Image();im.crossOrigin="anonymous";im.decoding="async";im.alt="";
-    const t={z,x,y,el:d,im,ok:false,lv:0};d.appendChild(im);
-    im.onload=()=>{t.ok=true;d.classList.add("ok");this.check();};
-    /* Fehlt die Kachel (offline nicht gespeichert, ausserhalb des Gebiets): nächstgröbere vergrössert zeigen */
-    im.onerror=()=>{if(t.lv>=5||z-t.lv-1<this.o.min){t.ok=true;d.classList.add("fail");this.check();return;}t.lv++;const s=1<<t.lv;
-      im.style.width=im.style.height=(s*100)+"%";im.style.left=-((x%s)*100)+"%";im.style.top=-((y%s)*100)+"%";
-      im.src=this.url(z-t.lv,x>>t.lv,y>>t.lv);};
-    im.src=this.url(z,x,y);this.tiles.set(k,t);this.el.appendChild(d);return t;}
-  check(){if(this._ck)return;this._ck=requestAnimationFrame(()=>{this._ck=0;this.prune(false);});}
-  /* Alte Zoomstufen erst entfernen, wenn die aktuellen Kacheln da sind (keine grauen Flächen beim Zoomen) */
-  prune(force){const need=this.need;if(!need)return;let all=true;for(const k of need){const t=this.tiles.get(k);if(!t||!t.ok){all=false;break;}}
-    for(const [k,t] of this.tiles){if(need.has(k))continue;if(all||force||t.z===this.tz){t.im.onload=t.im.onerror=null;t.im.src="";t.el.remove();this.tiles.delete(k);}}}
-  render(m){const o=this.o;let tz=Math.round(m.z);tz=Math.max(o.min,Math.min(o.max,tz));
-    if(m.z<o.min-0.5||(o.hideBelow&&m.z<o.hideBelow)){this.el.style.display="none";return;}this.el.style.display="";
-    const n=1<<tz,S=TS*Math.pow(2,m.z),ts=S/n,cx=m.cx*S-m.w/2,cy=m.cy*S-m.h/2;
-    const x0=Math.max(0,Math.floor(cx/ts)),x1=Math.min(n-1,Math.floor((cx+m.w)/ts)),y0=Math.max(0,Math.floor(cy/ts)),y1=Math.min(n-1,Math.floor((cy+m.h)/ts));
-    const b=o.bounds;let bx0=0,bx1=n-1,by0=0,by1=n-1;if(b){bx0=Math.floor(lonX(b[1])*n);bx1=Math.floor(lonX(b[3])*n);by0=Math.floor(latY(b[2])*n);by1=Math.floor(latY(b[0])*n);}
-    const need=new Set();this.tz=tz;
-    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){if(x<bx0||x>bx1||y<by0||y>by1)continue;const k=tz+"/"+x+"/"+y;need.add(k);if(!this.tiles.has(k))this.mk(tz,x,y,k);}
-    this.need=need;
-    for(const t of this.tiles.values()){const f=Math.pow(2,tz-t.z),s=ts*f,l=Math.round(t.x*s-cx),tp=Math.round(t.y*s-cy),r=Math.round((t.x+1)*s-cx),bt=Math.round((t.y+1)*s-cy);
-      const st=t.el.style;st.transform=`translate(${l}px,${tp}px)`;st.width=(r-l)+"px";st.height=(bt-tp)+"px";st.zIndex=t.z===tz?2:1;}
-    if(this.tiles.size>need.size*3)this.prune(true);}
-  clear(){for(const t of this.tiles.values()){t.im.onload=t.im.onerror=null;t.im.src="";}this.tiles.clear();this.el.textContent="";}
-}
+const VMAX={skitour:33,wandern:8,hochtour:8,winterhochtour:33,gravel:28,bike:28};/* m/s – schneller ist ein GPS-Sprung */
+/* Bereinigung: gibt bereinigte Punkte, Pausen und Kennzahlen zurück. Original bleibt unverändert gespeichert. */
+function cleanTrack(raw,art){const vmax=VMAX[art]||10;let p=raw.filter(x=>isFinite(x[0])&&isFinite(x[1])&&Math.abs(x[0])<=90);
+  const hasT=p.filter(x=>x[3]).length>p.length*0.8;let removed=0;
+  if(hasT){p=p.filter(x=>x[3]);p.sort((a,b)=>a[3]-b[3]);
+    /* 1. Sprünge: Punkte mit unmöglichem Tempo weglassen */
+    const dd=[];for(const x of p){if(dd.length&&x[3]<=dd[dd.length-1][3]){removed++;continue;}dd.push(x);}p=dd;
+    const sp=(a,b)=>distM(a[0],a[1],b[0],b[1])/Math.max(1,(b[3]-a[3])/1000);
+    /* ein Punkt ist ein Ausreisser, wenn er sowohl vom Vorgänger als auch zum Nachfolger «unmöglich schnell» wäre */
+    for(let pass=0;pass<3;pass++){const out=[];for(let i=0;i<p.length;i++){const a=out[out.length-1],b=p[i],c=p[i+1];
+        const bad=a&&c?sp(a,b)>vmax&&sp(b,c)>vmax&&sp(a,c)<=vmax*1.5:!a&&c&&p[i+2]?sp(b,c)>vmax&&sp(c,p[i+2])<=vmax:false;
+        if(bad){removed++;continue;}out.push(b);}if(out.length===p.length)break;p=out;}}
+  /* 2. Höhen: Sprünge > 8 m/s entfernen, Lücken füllen, glätten */
+  const e=p.map(x=>x[2]);
+  if(hasT)for(let i=1;i<p.length;i++){if(e[i]==null||e[i-1]==null)continue;const dt=(p[i][3]-p[i-1][3])/1000;if(dt>0&&Math.abs(e[i]-e[i-1])/dt>8&&Math.abs(e[i]-e[i-1])>20){e[i]=null;removed++;}}
+  let last=null;for(let i=0;i<e.length;i++){if(e[i]!=null){if(last!=null&&i-last>1)for(let k=last+1;k<i;k++)e[k]=e[last]+(e[i]-e[last])*(k-last)/(i-last);last=i;}}
+  const f=e.findIndex(v=>v!=null);if(f>0)for(let k=0;k<f;k++)e[k]=e[f];if(last!=null)for(let k=last+1;k<e.length;k++)e[k]=e[last];
+  const sm=e.map((v,i)=>{if(v==null)return null;let s=0,n=0;for(let k=Math.max(0,i-2);k<=Math.min(e.length-1,i+2);k++)if(e[k]!=null){s+=e[k];n++;}return n?s/n:v;});
+  p=p.map((x,i)=>[x[0],x[1],sm[i]!=null?Math.round(sm[i]*10)/10:null,x[3]]);
+  /* 3. Pausen: bleibt man ≥ 2 Minuten innerhalb von 20 m und 10 Höhenmetern, wird das GPS-Zittern zu einem Ort zusammengefasst */
+  const pauses=[];
+  if(hasT&&p.length>2){const out=[];let i=0;while(i<p.length){let j=i+1,sl=p[i][0],so=p[i][1],n=1;
+      /* nur echte Pause: kaum Ortswechsel UND kaum Höhenwechsel (steiles, langsames Steigen ist keine Pause) */
+      while(j<p.length&&distM(sl/n,so/n,p[j][0],p[j][1])<20&&(p[j][2]==null||p[i][2]==null||Math.abs(p[j][2]-p[i][2])<10)){sl+=p[j][0];so+=p[j][1];n++;j++;}
+      const dur=(p[j-1][3]-p[i][3])/1000;
+      if(j-i>2&&dur>=120){const la=sl/n,lo=so/n,h=p[i+Math.floor((j-i)/2)][2];out.push([la,lo,h,p[i][3]],[la,lo,h,p[j-1][3]]);pauses.push({lat:la,lon:lo,t0:p[i][3],t1:p[j-1][3]});i=j;}
+      else{out.push(p[i]);i++;}}p=out;}
+  return {pts:p,pauses,removed,stats:trackStats(p,hasT)};}
+function trackStats(p,hasT){let dist=0,up=0,down=0,moving=0,ref=null,emin=Infinity,emax=-Infinity;const TH=5;
+  for(let i=0;i<p.length;i++){const h=p[i][2];if(h!=null){if(h<emin)emin=h;if(h>emax)emax=h;
+      if(ref==null)ref=h;else if(h-ref>=TH){up+=h-ref;ref=h;}else if(ref-h>=TH){down+=ref-h;ref=h;}}
+    if(i){const d=distM(p[i-1][0],p[i-1][1],p[i][0],p[i][1]);dist+=d;
+      if(hasT&&p[i][3]&&p[i-1][3]){const dt=(p[i][3]-p[i-1][3])/1000;const v=dt>0?d/dt:0;if(!(dt>45&&v<0.3)&&!(d<0.5&&dt>5))moving+=dt;}}}
+  const t0=hasT&&p.length?p[0][3]:null,t1=hasT&&p.length?p[p.length-1][3]:null;
+  return {dist:Math.round(dist),up:Math.round(up),down:Math.round(down),moving:hasT?Math.round(moving):null,total:hasT?Math.round((t1-t0)/1000):null,
+    t0,emin:isFinite(emin)?Math.round(emin):null,emax:isFinite(emax)?Math.round(emax):null};}
+/* Kennzahlen für das Tempo-Diagramm: Steigen (Abschnitte > 8 % Steigung), Abstieg (< −8 %), Flach (|Steigung| < 4 %) */
+function paceStats(p){let su=0,st=0,du=0,dt2=0,fd=0,ft=0;
+  for(let i=1;i<p.length;i++){const a=p[i-1],b=p[i];if(!a[3]||!b[3]||a[2]==null||b[2]==null)continue;const dt=(b[3]-a[3])/1000;const d=distM(a[0],a[1],b[0],b[1]);
+    if(dt<=0||dt>120||d<0.5)continue;const dh=b[2]-a[2],g=dh/Math.max(d,1);
+    if(g>0.08){su+=dh;st+=dt;}else if(g<-0.08){du+=-dh;dt2+=dt;}else if(Math.abs(g)<0.04){fd+=d;ft+=dt;}}
+  return {vu:st>600?Math.round(su/st*3600):null,vd:dt2>600?Math.round(du/dt2*3600):null,vf:ft>600?Math.round(fd/ft*36)/10:null};}
 
-class Map_{
-  constructor(el,o){this.el=el;this.o=Object.assign({minZoom:7,maxZoom:20,bounds:null},o||{});el.classList.add("bm-map");
-    this.pane=document.createElement("div");this.pane.className="bm-pane";el.appendChild(this.pane);
-    this.cv=document.createElement("canvas");this.cv.className="bm-cv";el.appendChild(this.cv);
-    this.mpane=document.createElement("div");this.mpane.className="bm-mk-pane";el.appendChild(this.mpane);
-    this.layers=[];this.markers=new Set();this.drawers=[];this.ev={};this.cx=0.5;this.cy=0.5;this.z=8;this.w=0;this.h=0;this.raf=0;this.anim=null;
-    this.resize();new ResizeObserver(()=>{this.resize();this.render();}).observe(el);this.gestures();}
-  on(n,f){(this.ev[n]=this.ev[n]||[]).push(f);return this;}
-  off(n,f){this.ev[n]=(this.ev[n]||[]).filter(x=>x!==f);}
-  fire(n,d){(this.ev[n]||[]).slice().forEach(f=>{try{f(d);}catch(e){console.error(e);}});}
-  resize(){const r=this.el.getBoundingClientRect();this.w=Math.max(1,r.width);this.h=Math.max(1,r.height);const dpr=Math.min(2,window.devicePixelRatio||1);this.dpr=dpr;
-    this.cv.width=Math.round(this.w*dpr);this.cv.height=Math.round(this.h*dpr);this.cv.style.width=this.w+"px";this.cv.style.height=this.h+"px";}
-  addLayer(l){l.map=this;this.layers.push(l);this.pane.appendChild(l.el);this.render();return l;}
-  removeLayer(l){l.clear();l.el.remove();this.layers=this.layers.filter(x=>x!==l);}
-  get S(){return TS*Math.pow(2,this.z);}
-  getCenter(){return {lat:yLat(this.cy),lon:xLon(this.cx)};}
-  getZoom(){return this.z;}
-  clampView(){const b=this.o.bounds;this.z=Math.max(this.o.minZoom,Math.min(this.o.maxZoom,this.z));if(!b)return;
-    const x0=lonX(b[1]),x1=lonX(b[3]),y0=latY(b[2]),y1=latY(b[0]);this.cx=Math.max(x0,Math.min(x1,this.cx));this.cy=Math.max(y0,Math.min(y1,this.cy));}
-  setView(lat,lon,z){this.stop();this.cx=lonX(lon);this.cy=latY(lat);if(z!=null)this.z=z;this.clampView();this.render();this.moved();}
-  project(lat,lon){const S=this.S;return {x:(lonX(lon)-this.cx)*S+this.w/2,y:(latY(lat)-this.cy)*S+this.h/2};}
-  unproject(px,py){const S=this.S;return {lat:yLat(this.cy+(py-this.h/2)/S),lon:xLon(this.cx+(px-this.w/2)/S)};}
-  /* sichtbarer Ausschnitt [s,w,n,e] */
-  getBounds(){const a=this.unproject(0,this.h),b=this.unproject(this.w,0);return [a.lat,a.lon,b.lat,b.lon];}
-  /* padB: zusätzlicher Rand unten (z. B. für ein Panel über der Karte) */
-  fitBounds(bb,pad,padB,padR){pad=pad||40;padB=padB||0;padR=padR||0;const [s,w,n,e]=bb;const dx=Math.max(1e-9,lonX(e)-lonX(w)),dy=Math.max(1e-9,latY(s)-latY(n));
-    const z=Math.min(17,Math.max(this.o.minZoom,Math.floor(Math.log2(Math.min(Math.max(60,this.w-2*pad-padR)/(dx*TS),Math.max(60,this.h-2*pad-padB)/(dy*TS)))*4)/4));
-    const S=TS*Math.pow(2,z);const cy=(latY(s)+latY(n))/2+padB/2/S,cx=(lonX(w)+lonX(e))/2+padR/2/S;this.flyTo(yLat(cy),xLon(cx),z);}
-  zoomAround(nz,px,py){nz=Math.max(this.o.minZoom,Math.min(this.o.maxZoom,nz));const a=this.unproject(px,py);this.z=nz;
-    const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render();}
-  panBy(dx,dy){const S=this.S;this.cx-=dx/S;this.cy-=dy/S;this.clampView();this.render();}
-  stop(){if(this.anim){cancelAnimationFrame(this.anim.id);this.anim=null;}}
-  animate(dur,step,done){this.stop();const t0=performance.now();const a={};this.anim=a;
-    const f=t=>{if(this.anim!==a)return;let k=Math.min(1,(t-t0)/dur);const e=1-Math.pow(1-k,3);step(e);if(k<1)a.id=requestAnimationFrame(f);else{this.anim=null;done&&done();}};a.id=requestAnimationFrame(f);}
-  zoomAnim(nz,px,py){nz=Math.max(this.o.minZoom,Math.min(this.o.maxZoom,nz));const z0=this.z;if(Math.abs(nz-z0)<0.01)return;
-    if(px==null){px=this.w/2;py=this.h/2;}const a=this.unproject(px,py);
-    this.animate(220,e=>{this.z=z0+(nz-z0)*e;const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render();},()=>this.moved());}
-  flyTo(lat,lon,z){const x0=this.cx,y0=this.cy,z0=this.z,x1=lonX(lon),y1=latY(lat),z1=z==null?z0:z;
-    const far=Math.hypot(x1-x0,y1-y0)*TS*Math.pow(2,Math.min(z0,z1))>this.w*3;
-    if(far){this.setView(lat,lon,z1);return;}
-    this.animate(350,e=>{this.cx=x0+(x1-x0)*e;this.cy=y0+(y1-y0)*e;this.z=z0+(z1-z0)*e;this.clampView();this.render();},()=>this.moved());}
-  render(){if(this.raf)return;this.raf=requestAnimationFrame(()=>{this.raf=0;this.draw();});}
-  draw(){for(const l of this.layers)l.render(this);
-    for(const m of this.markers)this.placeMarker(m);
-    const c=this.cv.getContext("2d");c.setTransform(this.dpr,0,0,this.dpr,0,0);c.clearRect(0,0,this.w,this.h);
-    for(const d of this.drawers){try{d(c,this);}catch(e){console.error(e);}}
-    this.fire("move");}
-  moved(){clearTimeout(this._mt);this._mt=setTimeout(()=>this.fire("moveend"),180);}
-  addDrawer(f){this.drawers.push(f);this.render();return f;}
-  removeDrawer(f){this.drawers=this.drawers.filter(x=>x!==f);this.render();}
-  /* Punkt: {lat,lon,html|el,cls,anchor:[x,y],z,data,drag} */
-  addMarker(m){if(!m.el){m.el=document.createElement("div");m.el.innerHTML=m.html||"";}m.el.classList.add("bm-mk");if(m.cls)m.el.className+=" "+m.cls;
-    m.el._mk=m;if(m.z)m.el.style.zIndex=m.z;this.mpane.appendChild(m.el);this.markers.add(m);this.placeMarker(m);return m;}
-  removeMarker(m){if(!m)return;m.el.remove();this.markers.delete(m);}
-  moveMarker(m,lat,lon){m.lat=lat;m.lon=lon;this.placeMarker(m);}
-  placeMarker(m){const p=this.project(m.lat,m.lon);const a=m.anchor||[0,0];
-    if(p.x<-80||p.y<-80||p.x>this.w+80||p.y>this.h+80||(m.minZoom&&this.z<m.minZoom)){if(!m._hid){m.el.style.display="none";m._hid=1;}return;}
-    if(m._hid){m.el.style.display="";m._hid=0;}m.el.style.transform=`translate(${Math.round(p.x-a[0])}px,${Math.round(p.y-a[1])}px)`;}
-  gestures(){const el=this.el,P=new Map();let g=null,lastW=0,wAcc=0,lp=null,vel=[];
-    const pt=e=>{const r=el.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};};
-    el.addEventListener("pointerdown",e=>{if(e.button>0)return;if(e.target.closest(".bm-ui"))return;
-      const mkEl=e.target.closest(".bm-mk");const p=pt(e);P.set(e.pointerId,p);try{el.setPointerCapture(e.pointerId);}catch(x){}this.stop();
-      if(P.size===1){const mk=mkEl&&mkEl._mk;g={mode:"tap",x:p.x,y:p.y,t:Date.now(),mk,drag:mk&&mk.drag};vel=[{x:p.x,y:p.y,t:performance.now()}];
-        clearTimeout(lp);lp=setTimeout(()=>{if(g&&g.mode==="tap"){g.mode="long";this._lpT=Date.now();const ll=this.unproject(g.x,g.y);this.fire(g.mk?"markerlong":"longpress",{lat:ll.lat,lon:ll.lon,x:g.x,y:g.y,marker:g.mk});}},550);}
-      else if(P.size===2){clearTimeout(lp);const a=[...P.values()];g={mode:"pinch",d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),z:this.z,mx:(a[0].x+a[1].x)/2,my:(a[0].y+a[1].y)/2};}});
-    el.addEventListener("pointermove",e=>{if(!P.has(e.pointerId)||!g)return;const p=pt(e);const prev=P.get(e.pointerId);P.set(e.pointerId,p);
-      if(g.mode==="pinch"&&P.size>=2){const a=[...P.values()];const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),mx=(a[0].x+a[1].x)/2,my=(a[0].y+a[1].y)/2;
-        this.panBy(mx-g.mx,my-g.my);g.mx=mx;g.my=my;if(g.d>10)this.zoomAround(g.z+Math.log2(d/g.d),mx,my);return;}
-      if(g.mode==="tap"&&Math.hypot(p.x-g.x,p.y-g.y)>7){clearTimeout(lp);g.mode=g.drag?"mdrag":"pan";if(g.mode==="mdrag")this.fire("markerdragstart",{marker:g.mk});}
-      if(g.mode==="pan"){this.panBy(p.x-prev.x,p.y-prev.y);vel.push({x:p.x,y:p.y,t:performance.now()});if(vel.length>6)vel.shift();}
-      else if(g.mode==="mdrag"){const ll=this.unproject(p.x,p.y);this.moveMarker(g.mk,ll.lat,ll.lon);this.fire("markerdrag",{marker:g.mk,lat:ll.lat,lon:ll.lon});}});
-    const up=e=>{if(!P.has(e.pointerId))return;P.delete(e.pointerId);clearTimeout(lp);if(!g)return;
-      if(g.mode==="pinch"){if(P.size===1){const a=[...P.values()][0];g={mode:"pan",x:a.x,y:a.y,t:Date.now(),pinched:true};vel=[];}else if(P.size===0){g=null;const zz=Math.round(this.z);if(Math.abs(zz-this.z)>0.02)this.zoomAnim(zz,this.w/2,this.h/2);else this.moved();}return;}
-      if(P.size>0)return;const p=pt(e);
-      if(g.mode==="tap"&&e.type==="pointerup"){const ll=this.unproject(p.x,p.y);
-        if(g.mk)this.fire("markerclick",{marker:g.mk,lat:g.mk.lat,lon:g.mk.lon,x:p.x,y:p.y});else this.fire("click",{lat:ll.lat,lon:ll.lon,x:p.x,y:p.y});}
-      else if(g.mode==="mdrag"){this.fire("markerdragend",{marker:g.mk,lat:g.mk.lat,lon:g.mk.lon});}
-      else if(g.mode==="pan"&&g.pinched){const zz=Math.round(this.z);if(Math.abs(zz-this.z)>0.02)this.zoomAnim(zz,p.x,p.y);else this.moved();}
-      else if(g.mode==="pan"){const now=performance.now();const v0=vel.filter(v=>now-v.t<120);if(v0.length>1){const a=v0[0],b=v0[v0.length-1],dt=Math.max(16,b.t-a.t);
-          let vx=(b.x-a.x)/dt*16,vy=(b.y-a.y)/dt*16;if(Math.hypot(vx,vy)>2){const step=()=>{vx*=0.92;vy*=0.92;if(Math.hypot(vx,vy)<0.5){this.anim=null;this.moved();return;}this.panBy(vx,vy);this.anim.id=requestAnimationFrame(step);};
-            this.stop();this.anim={id:requestAnimationFrame(step)};g=null;return;}}this.moved();}
-      g=null;};
-    el.addEventListener("pointerup",up);el.addEventListener("pointercancel",up);
-    el.addEventListener("dblclick",e=>{if(e.target.closest(".bm-ui")||e.target.closest(".bm-mk"))return;const p=pt(e);this.zoomAnim(Math.round(this.z)+(e.shiftKey?-1:1),p.x,p.y);});
-    el.addEventListener("wheel",e=>{e.preventDefault();const p=pt(e);const now=Date.now();if(now-lastW>400)wAcc=0;lastW=now;
-      const d=e.deltaMode===1?e.deltaY*30:e.deltaY;wAcc+=d;
-      if(e.ctrlKey||Math.abs(d)<40&&!Number.isInteger(e.deltaY)){/* Trackpad: fliessend */this.zoomAround(this.z-d*0.01,p.x,p.y);clearTimeout(this._wt);this._wt=setTimeout(()=>{const zz=Math.round(this.z);this.zoomAnim(zz,p.x,p.y);},250);wAcc=0;return;}
-      if(Math.abs(wAcc)>=50){const dir=wAcc>0?-1:1;wAcc=0;const base=this.anim?Math.round(this._tz||this.z):Math.round(this.z);this._tz=base+dir;this.zoomAnim(this._tz,p.x,p.y);}},{passive:false});
-    /* Rechtsklick (PC) wie langes Drücken – aber nicht doppelt nach einem Finger-Langdruck */
-    el.addEventListener("contextmenu",e=>{e.preventDefault();if(Date.now()-(this._lpT||0)<1500||e.target.closest(".bm-ui")||e.target.closest(".bm-mk"))return;const p=pt(e);const ll=this.unproject(p.x,p.y);this.fire("longpress",{lat:ll.lat,lon:ll.lon,x:p.x,y:p.y});});}
-}
-return {Map:Map_,TileLayer,lonX,latY,xLon,yLat};
-})();
+/* ---------- Tempo-Modell: Zeit = km/vf + Aufstieg/vu + Abstieg/vd ---------- */
+function tempoDefault(art){return Object.assign({},(ARTS[art]||ARTS.wandern).t);}
+function estTime(km,up,down,t){return 3600*(km/t.vf+up/t.vu+down/t.vd);}
+/* Lernen aus eigenen Touren: Ausgleichsrechnung über alle Touren der Sportart, sanft zur Vorgabe hingezogen
+   (so bleiben die Werte auch bei wenigen Touren vernünftig) */
+function learnTempo(tours,art){const T=tours.filter(t=>t.art===art&&t.status==="gemacht"&&t.moving>600&&t.dist>500).slice(-25);const d0=tempoDefault(art);
+  if(!T.length)return {t:d0,n:0};
+  const X=T.map(t=>[t.dist/1000,t.up,t.down]),y=T.map(t=>t.moving/3600);
+  const p=[1/d0.vf,1/d0.vu,1/d0.vd];
+  /* Vorfaktor: wie viel schneller/langsamer als die Vorgabe (Median) */
+  const fs=T.map((t,i)=>y[i]/(X[i][0]*p[0]+X[i][1]*p[1]+X[i][2]*p[2])).filter(isFinite).sort((a,b)=>a-b);const fac=fs[Math.floor(fs.length/2)]||1;
+  const pr=p.map(v=>v*fac);
+  const A=[[0,0,0],[0,0,0],[0,0,0]],b=[0,0,0];for(let i=0;i<X.length;i++)for(let r=0;r<3;r++){b[r]+=X[i][r]*y[i];for(let c=0;c<3;c++)A[r][c]+=X[i][r]*X[i][c];}
+  const med=k=>{const v=X.map(x=>x[k]).sort((a,c)=>a-c);return Math.max(1e-6,v[Math.floor(v.length/2)]);};
+  const lam=2;for(let k=0;k<3;k++){const w=lam*med(k)*med(k);A[k][k]+=w;b[k]+=w*pr[k];}
+  const s=solve3(A,b)||pr;const r=s.map((v,k)=>Math.max(pr[k]*0.4,Math.min(pr[k]*2.5,v)));
+  return {t:{vf:Math.round(10/r[0])/10,vu:Math.round(1/r[1]),vd:Math.round(1/r[2])},n:T.length,fac};}
+function solve3(A,b){const m=A.map((r,i)=>[...r,b[i]]);for(let i=0;i<3;i++){let mx=i;for(let k=i+1;k<3;k++)if(Math.abs(m[k][i])>Math.abs(m[mx][i]))mx=k;[m[i],m[mx]]=[m[mx],m[i]];
+    if(Math.abs(m[i][i])<1e-12)return null;for(let k=0;k<3;k++){if(k===i)continue;const f=m[k][i]/m[i][i];for(let c=i;c<4;c++)m[k][c]-=f*m[i][c];}}return m.map((r,i)=>r[3]/r[i]);}
+
+/* ---------- GPX schreiben ---------- */
+function toGPX(name,line,wpts){const x=s=>esc(s);const t=line.some(p=>p[3]);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Boschor Map" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${x(name)}</name></metadata>\n`+
+   (wpts||[]).map(w=>`<wpt lat="${w.lat.toFixed(6)}" lon="${w.lon.toFixed(6)}">${w.ele!=null?`<ele>${w.ele}</ele>`:""}<name>${x(w.name)}</name></wpt>\n`).join("")+
+   `<trk><name>${x(name)}</name><trkseg>\n`+line.map(p=>`<trkpt lat="${p[0].toFixed(6)}" lon="${p[1].toFixed(6)}">${p[2]!=null?`<ele>${(+p[2]).toFixed(1)}</ele>`:""}${t&&p[3]?`<time>${new Date(p[3]).toISOString()}</time>`:""}</trkpt>`).join("\n")+`\n</trkseg></trk>\n</gpx>\n`;}

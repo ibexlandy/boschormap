@@ -1,10 +1,11 @@
-Boschor Map – v1.1 (privates Projekt)
+Boschor Map – v1.2 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
   index.html             die App
   app.css                Aussehen
-  js/                    Programmteile (Karte, Touren, Offline, Abgleich, Verwaltung)
+  core.js, map.js, gpx.js, app.js, tours.js, offline.js, sync.js, admin.js
+                         Programmteile (Karte, Touren, Offline, Abgleich, Verwaltung)
   sw.js                  Offline-Speicher der App (Scope /boschormap/)
   manifest.webmanifest   damit man die App auf Handy und Tablet installieren kann
   icon-*.png, apple-touch-icon.png, favicon.png   App-Logo
@@ -12,7 +13,7 @@ Inhalt des Ordners
 
 1) Hosting auf GitHub Pages
   Konto «ibexlandy», neues Repository «boschormap» (öffentlich).
-  Alle Dateien des Zip (mit dem Ordner js) ins Repository hochladen.
+  Alle Dateien des Zip auf einmal ins Repository hochladen (keine Unterordner).
   Settings › Pages › Source: «Deploy from a branch», Branch «main», Ordner «/ (root)» › Save.
   Nach 1–2 Minuten erreichbar: https://ibexlandy.github.io/boschormap/
   Neue Version: alle Dateien des Zip erneut hochladen (ersetzen), danach in der App
@@ -51,6 +52,9 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v1.2
+- Alle Dateien ohne Unterordner (einfacheres Hochladen auf GitHub: alle Dateien auf einmal hineinziehen).
 
 NEU IN v1.1 (erste Version)
 - Karten: swisstopo-Landeskarte, Winterkarte und Luftbild (SWISSIMAGE). Ebenen: Hangneigung über 30°,
