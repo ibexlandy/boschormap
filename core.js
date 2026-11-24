@@ -1,6 +1,6 @@
 /* BoschorMap – Grundlagen: Hilfsfunktionen, Speicher (IndexedDB), Koordinaten, Konstanten */
 "use strict";
-const APP_VERSION="2.3";
+const APP_VERSION="2.4";
 const LSP="bm_";            /* eigenes localStorage-Präfix – getrennt von IbexMap auf derselben Herkunft */
 const DBN="boschormap",TDBN="boschormap-tiles";
 

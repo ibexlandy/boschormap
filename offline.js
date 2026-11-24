@@ -139,18 +139,41 @@ async function bulletinAt(lat,lon){if(!slfMem)slfMem=await metaGet("slf",null);i
 function rose(asp){const all=["N","NE","E","SE","S","SW","W","NW"];let s=`<svg class="rose" viewBox="-32 -32 64 64" style="stroke:#62707d;stroke-width:.8">`;
   all.forEach((a,i)=>{const a0=(i*45-22.5-90)*RAD,a1=(i*45+22.5-90)*RAD;s+=`<path d="M0 0L${(28*Math.cos(a0)).toFixed(1)} ${(28*Math.sin(a0)).toFixed(1)}A28 28 0 0 1 ${(28*Math.cos(a1)).toFixed(1)} ${(28*Math.sin(a1)).toFixed(1)}z" fill="${asp.includes(a)?"#1f3a52":"#e6f0f7"}"/>`;});
   return s+`<text x="0" y="-21" font-size="9" text-anchor="middle" fill="#fff" stroke="none">N</text></svg>`;}
+const DCOL=["#e6f0f7","#ccff66","#ffff00","#ff9900","#ff0000","#ff0000"];
+function rose2(asp){const all=["N","NE","E","SE","S","SW","W","NW"],lab={N:"N",E:"O",S:"S",W:"W"};let s=`<svg class="rose2" viewBox="-34 -34 68 68" aria-label="Expositionen: ${asp.map(a=>a.replace(/E/g,"O")).join(", ")||"keine"}">`;
+  const P=(r,a)=>`${(r*Math.sin(a*RAD)).toFixed(1)} ${(-r*Math.cos(a*RAD)).toFixed(1)}`;
+  all.forEach((a,i)=>{const c=i*45,on=asp.includes(a);s+=`<path d="M0 0L${P(17,c-22.5)}L${P(31,c)}L${P(17,c+22.5)}Z" fill="${on?"#24507a":"#fff"}" stroke="#24507a" stroke-width="1.4" stroke-linejoin="round"/>`;
+    if(lab[a])s+=`<text x="${(20*Math.sin(c*RAD)).toFixed(1)}" y="${(-20*Math.cos(c*RAD)+3.2).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" stroke="none" fill="${on?"#fff":"#24507a"}">${lab[a]}</text>`;});
+  return s+`</svg>`;}
+function elevTxt(v){if(v==null||v==="")return "";if(/treeline/i.test(v))return "Waldgrenze";const n=parseFloat(v);return isFinite(n)?fmtN(n)+" m":esc(v);}
+function elevIcon(e){const lo=e&&e.lowerBound,hi=e&&e.upperBound;const mt="M4 46L24 10L31 20L36 14L56 46Z";const top=lo&&!hi,bot=hi&&!lo;
+  const lbl=lo&&hi?`${elevTxt(lo)} – ${elevTxt(hi)}`:top?`über ${elevTxt(lo)}`:bot?`unter ${elevTxt(hi)}`:"alle Höhen";
+  return `<span class="elev"><svg viewBox="0 0 60 50"><defs><clipPath id="ec"><path d="${mt}"/></clipPath></defs><path d="${mt}" fill="#fff" stroke="#24507a" stroke-width="2" stroke-linejoin="round"/>
+   <g clip-path="url(#ec)">${top?`<rect x="0" y="0" width="60" height="29" fill="#24507a"/>`:bot?`<rect x="0" y="29" width="60" height="21" fill="#24507a"/>`:lo&&hi?`<rect x="0" y="20" width="60" height="16" fill="#24507a"/>`:`<rect width="60" height="50" fill="#24507a"/>`}</g>
+   ${top||bot?`<path d="M0 29H60" stroke="#24507a" stroke-width="1.6"/>`:""}</svg><b>${lbl}</b></span>`;}
+const PROB_IC={new_snow:`<path d="M12 22a7 7 0 0 1 1-14 9 9 0 0 1 17 2 6 6 0 0 1 0 12z" fill="#fff" stroke="#24507a" stroke-width="1.8"/><g stroke="#24507a" stroke-width="1.6" stroke-linecap="round"><path d="M12 28v6M9 31h6M24 28v6M21 31h6"/><path d="M18 34v5M15.5 36.5h5"/></g>`,
+ wind_slab:`<g fill="none" stroke="#24507a" stroke-width="2" stroke-linecap="round"><path d="M5 12h18a4 4 0 1 0-4-4"/><path d="M5 19h26a4 4 0 1 1-4 4"/></g><path d="M4 40c10-10 22-12 34-11v11z" fill="#9ec5e2" stroke="#24507a" stroke-width="1.6"/>`,
+ persistent_weak_layers:`<rect x="5" y="8" width="32" height="7" rx="2" fill="#fff" stroke="#24507a" stroke-width="1.6"/><path d="M5 21h32" stroke="#c8102e" stroke-width="2.2" stroke-dasharray="3 2.4"/><rect x="5" y="27" width="32" height="9" rx="2" fill="#9ec5e2" stroke="#24507a" stroke-width="1.6"/>`,
+ wet_snow:`<path d="M21 5c6 9 11 15 11 21a11 11 0 0 1-22 0c0-6 5-12 11-21z" fill="#9ec5e2" stroke="#24507a" stroke-width="1.8"/><path d="M16 27a5 5 0 0 0 5 5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`,
+ gliding_snow:`<path d="M3 38L39 10v28z" fill="#fff" stroke="#24507a" stroke-width="1.8" stroke-linejoin="round"/><path d="M22 23l3 5-2 3 3 5" fill="none" stroke="#c8102e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+ cornices:`<path d="M3 38V18h20c8 0 14 2 16 6-4-1-8 0-11 3v11z" fill="#fff" stroke="#24507a" stroke-width="1.8" stroke-linejoin="round"/><path d="M32 30l-3 5" stroke="#c8102e" stroke-width="2" stroke-linecap="round"/>`,
+ favourable_situation:`<circle cx="21" cy="21" r="15" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/><path d="M14 21l5 5 9-10" fill="none" stroke="#2e7d32" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`};
+PROB_IC.no_distinct_avalanche_problem=PROB_IC.favourable_situation;
 function bulletinHTML(b,h){if(!b)return `<div class="card"><h3><svg><use href="#i-snow"/></svg>Lawinenbulletin</h3><div class="muted">Noch nicht gespeichert. Mit Netz «Jetzt aktualisieren» tippen.</div></div>`;
   if(b.none)return `<div class="card"><h3><svg><use href="#i-snow"/></svg>Lawinenbulletin</h3><div class="muted">Für diesen Ort gibt es im gespeicherten Bulletin (Stand ${fmtDT(b.t)}) keine Warnregion – z. B. ausserhalb der Saison oder ausserhalb der Schweizer Alpen.</div></div>`;
-  const v=b.valid||{};const fromTo=v.startTime?`${fmtDT(Date.parse(v.startTime))} – ${fmtDT(Date.parse(v.endTime))}`:"";
-  return `<div class="card"><h3><svg><use href="#i-snow"/></svg>Lawinenbulletin</h3>${b.stale?`<div class="note"><b>Abgelaufen.</b> Gültig war es ${esc(fromTo)}. Mit Netz aktualisieren.</div>`:""}
-   <div class="row"><span class="danger d${b.level||1}">${b.level||"–"}${esc(b.sub)}</span><span class="grow"><b>Gefahrenstufe ${b.level?LVN[b.level]:"–"}</b><br><small class="muted">${esc(b.regions.slice(0,3).join(", "))}${b.regions.length>3?" …":""}</small></span></div>
-   <p class="muted small">Gültig ${esc(fromTo)} · gespeichert ${fmtDT(b.t)}</p>
-   ${b.ap.map(a=>`<div class="q"><div>${rose(a.asp)}</div><div class="grow"><b>${esc(PROB[a.t]||a.t)}</b>${a.elev?`<br><small>${a.elev.lowerBound?"oberhalb "+fmtN(+a.elev.lowerBound)+" m":""}${a.elev.upperBound?" unterhalb "+fmtN(+a.elev.upperBound)+" m":""}</small>`:""}
-     ${a.core?`<br><small class="muted">${esc(a.core)}</small>`:""}${a.c?`<div class="bsec"><b class="small">Beschreibung</b><p class="small" style="white-space:pre-wrap">${esc(a.c)}</p></div>`:""}</div></div>`).join("")}
+  const v=b.valid||{};const fromTo=v.startTime?`${fmtDT(Date.parse(v.startTime))} – ${fmtDT(Date.parse(v.endTime))}`:"";const L=b.level||0;
+  const dt=x=>{const t=Date.parse(x);return isFinite(t)?fmtDT(t):"–";};
+  return `<div class="card bul"><h3><svg><use href="#i-snow"/></svg>Lawinenbulletin</h3>${b.stale?`<div class="note"><b>Abgelaufen.</b> Gültig war es ${esc(fromTo)}. Mit Netz aktualisieren.</div>`:""}
+   <div class="breg">${esc(b.regions.slice(0,3).join(", "))}${b.regions.length>3?" …":""}</div>
+   <div class="bvals"><div><small>Gültig ab</small><b>${v.startTime?dt(v.startTime):"–"}</b></div><div><small>Gültig bis</small><b>${v.endTime?dt(v.endTime):"–"}</b></div><div><small>Nächstes Update</small><b>${b.next?dt(b.next):"–"}</b></div></div>
+   <div class="bband d${L||1}"><span class="blv">${L||"–"}${esc(b.sub)}</span><b>${L?LVN[L].replace(/^./,c=>c.toUpperCase()):"Keine Angabe"}</b></div>
+   ${b.ap.map(a=>{const ic=PROB_IC[a.t];const show=a.t!=="favourable_situation"&&a.t!=="no_distinct_avalanche_problem";
+     return `<div class="bprob" style="border-color:${DCOL[a.v||L]||DCOL[0]}">${show?`<div class="bpt">${rose2(a.asp)}${elevIcon(a.elev)}</div>`:""}
+     <div class="bpb">${ic?`<span class="bpi"><svg viewBox="0 0 42 42">${ic}</svg></span>`:""}<div class="grow"><b>${esc(PROB[a.t]||a.t)}</b>${a.c?`<p style="white-space:pre-wrap">${esc(a.c)}</p>`:""}${a.core?`<p class="muted small">${esc(a.core)}</p>`:""}</div></div></div>`;}).join("")}
    ${h&&b.critLow!=null&&h>=b.critLow?`<div class="note">Der Zielort (${fmtN(h)} m) liegt im Höhenbereich der Lawinenprobleme.</div>`:""}
    ${b.snow?`<div class="bsec"><b class="small">Schneedecke</b><p class="small" style="white-space:pre-wrap">${esc(b.snow)}</p></div>`:""}
    ${b.tend?`<div class="bsec"><b class="small">Tendenz</b><p class="small">${esc(b.tend)}</p></div>`:""}
-   <p class="muted small">Quelle: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch</p></div>`;}
+   <p class="muted small">Quelle: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch · gespeichert ${fmtDT(b.t)}</p></div>`;}
 function bindBulletin(){}
 
 /* ---------- Wetter: Lokalprognosen MeteoSchweiz (Tageswerte, ganze Schweiz, offline gespeichert) ---------- */
