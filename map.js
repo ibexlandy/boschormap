@@ -46,7 +46,7 @@ class Map_{
     this.cv=document.createElement("canvas");this.cv.className="bm-cv";el.appendChild(this.cv);
     this.mpane=document.createElement("div");this.mpane.className="bm-mk-pane";el.appendChild(this.mpane);
     this.layers=[];this.markers=new Set();this.drawers=[];this.ev={};this.cx=0.5;this.cy=0.5;this.z=8;this.w=0;this.h=0;this.raf=0;this.anim=null;
-    this.resize();new ResizeObserver(()=>{this.resize();this.render();}).observe(el);this.gestures();}
+    this.resize();new ResizeObserver(()=>{this.resize();this.clampView();this.render();}).observe(el);this.gestures();}
   on(n,f){(this.ev[n]=this.ev[n]||[]).push(f);return this;}
   off(n,f){this.ev[n]=(this.ev[n]||[]).filter(x=>x!==f);}
   fire(n,d){(this.ev[n]||[]).slice().forEach(f=>{try{f(d);}catch(e){console.error(e);}});}
@@ -57,8 +57,11 @@ class Map_{
   get S(){return TS*Math.pow(2,this.z);}
   getCenter(){return {lat:yLat(this.cy),lon:xLon(this.cx)};}
   getZoom(){return this.z;}
-  clampView(){const b=this.o.bounds;this.z=Math.max(this.o.minZoom,Math.min(this.o.maxZoom,this.z));if(!b)return;
-    const x0=lonX(b[1]),x1=lonX(b[3]),y0=latY(b[2]),y1=latY(b[0]);this.cx=Math.max(x0,Math.min(x1,this.cx));this.cy=Math.max(y0,Math.min(y1,this.cy));}
+  /* Ansicht so begrenzen, dass der Bildschirm nie über den Kartenrand hinausragt (kein Grau) */
+  minZ(){const b=this.o.bounds;if(!b)return this.o.minZoom;const dx=lonX(b[3])-lonX(b[1]),dy=latY(b[0])-latY(b[2]);return Math.max(this.o.minZoom,Math.log2(Math.max(this.w/(dx*TS),this.h/(dy*TS))));}
+  clampView(){const b=this.o.bounds;this.z=Math.max(this.minZ(),Math.min(this.o.maxZoom,this.z));if(!b)return;
+    const S=this.S,hw=this.w/2/S,hh=this.h/2/S;const x0=lonX(b[1])+hw,x1=lonX(b[3])-hw,y0=latY(b[2])+hh,y1=latY(b[0])-hh;
+    this.cx=x0>x1?(x0+x1)/2:Math.max(x0,Math.min(x1,this.cx));this.cy=y0>y1?(y0+y1)/2:Math.max(y0,Math.min(y1,this.cy));}
   setView(lat,lon,z){this.stop();this.cx=lonX(lon);this.cy=latY(lat);if(z!=null)this.z=z;this.clampView();this.render();this.moved();}
   project(lat,lon){const S=this.S;return {x:(lonX(lon)-this.cx)*S+this.w/2,y:(latY(lat)-this.cy)*S+this.h/2};}
   unproject(px,py){const S=this.S;return {lat:yLat(this.cy+(py-this.h/2)/S),lon:xLon(this.cx+(px-this.w/2)/S)};}
@@ -68,13 +71,13 @@ class Map_{
   fitBounds(bb,pad,padB,padR){pad=pad||40;padB=padB||0;padR=padR||0;const [s,w,n,e]=bb;const dx=Math.max(1e-9,lonX(e)-lonX(w)),dy=Math.max(1e-9,latY(s)-latY(n));
     const z=Math.min(17,Math.max(this.o.minZoom,Math.floor(Math.log2(Math.min(Math.max(60,this.w-2*pad-padR)/(dx*TS),Math.max(60,this.h-2*pad-padB)/(dy*TS)))*4)/4));
     const S=TS*Math.pow(2,z);const cy=(latY(s)+latY(n))/2+padB/2/S,cx=(lonX(w)+lonX(e))/2+padR/2/S;this.flyTo(yLat(cy),xLon(cx),z);}
-  zoomAround(nz,px,py){nz=Math.max(this.o.minZoom,Math.min(this.o.maxZoom,nz));const a=this.unproject(px,py);this.z=nz;
+  zoomAround(nz,px,py){nz=Math.max(this.minZ(),Math.min(this.o.maxZoom,nz));const a=this.unproject(px,py);this.z=nz;
     const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render();}
   panBy(dx,dy){const S=this.S;this.cx-=dx/S;this.cy-=dy/S;this.clampView();this.render();}
   stop(){if(this.anim){cancelAnimationFrame(this.anim.id);this.anim=null;}}
   animate(dur,step,done){this.stop();const t0=performance.now();const a={};this.anim=a;
     const f=t=>{if(this.anim!==a)return;let k=Math.min(1,(t-t0)/dur);const e=1-Math.pow(1-k,3);step(e);if(k<1)a.id=requestAnimationFrame(f);else{this.anim=null;done&&done();}};a.id=requestAnimationFrame(f);}
-  zoomAnim(nz,px,py){nz=Math.max(this.o.minZoom,Math.min(this.o.maxZoom,nz));const z0=this.z;if(Math.abs(nz-z0)<0.01)return;
+  zoomAnim(nz,px,py){nz=Math.max(this.minZ(),Math.min(this.o.maxZoom,nz));const z0=this.z;if(Math.abs(nz-z0)<0.01)return;
     if(px==null){px=this.w/2;py=this.h/2;}const a=this.unproject(px,py);
     this.animate(220,e=>{this.z=z0+(nz-z0)*e;const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render();},()=>this.moved());}
   flyTo(lat,lon,z){const x0=this.cx,y0=this.cy,z0=this.z,x1=lonX(lon),y1=latY(lat),z1=z==null?z0:z;

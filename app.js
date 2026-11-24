@@ -56,7 +56,7 @@ const artIc=a=>`<span class="ic" style="background:${(ARTS[a]||ARTS.wandern).c}"
 const pointDone=p=>p.cat==="gipfel"&&(p.visits||[]).length>0;
 
 /* ---------- Karte ---------- */
-function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:[45.5,5.6,48.1,10.9]});
+function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:CH_BOUNDS});
   const lv=lsJ("lastview",null);if(lv&&isFinite(lv.lat))map.setView(lv.lat,lv.lon,lv.z);else map.setView(46.75,8.2,8);
   setBase(v.base||"lk");for(const k in OVERLAYS)if(v.ov&&v.ov[k])setOverlay(k,true);
   map.addDrawer(drawTours);map.addDrawer(drawMisc);map.addDrawer(drawSteep);map.addDrawer(drawCheck);map.addDrawer(drawHeat);

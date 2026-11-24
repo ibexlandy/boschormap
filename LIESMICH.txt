@@ -1,4 +1,4 @@
-BoschorMap – v2.5 (privates Projekt)
+BoschorMap – v2.6 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,9 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v2.6
+- Karte: Verschieben und Herauszoomen nur noch so weit, dass kein grauer Rand ausserhalb der Karte sichtbar wird.
 
 NEU IN v2.5
 - Offline-Regionen: neben «Rechteck» auch «Freie Form» – Punkte rund um das Gebiet antippen, ziehen zum Verschieben, antippen zum Entfernen. Geladen werden nur die Kacheln innerhalb der Form (weniger Speicher, schnellerer Download).
