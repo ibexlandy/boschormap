@@ -119,7 +119,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
    ${t.diffAuto?diffHTML(t.diffAuto).replace("Schwierigkeit (Vorschlag)",/Skirouten/.test(t.diffAuto.src||"")?"Schwierigkeit laut Skirouten":"Schwierigkeit laut Wegen"):""}
    ${prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="tProf"></canvas><div class="muted small" id="tProfI">Antippen oder darüberfahren: Stelle auf der Karte</div></div>`:""}
    ${prof.length>2?steepHTML(slopeInfo(prof,t.prof?60:100)):""}
-   ${prof.length>2?checkCard(tourCheckKey(t)):""}
+   ${prof.length>2?checkCard(tourCheckKey(t),!!(ARTS[t.art]||{}).ski):""}
    ${t.merged?`<p class="muted small">Aus ${t.merged} Tracks zusammengefasst.</p>`:""}
    ${!idea&&(t.removed||t.pauses)?`<p class="muted small">Bereinigt: ${t.pauses?t.pauses+" Pausen zusammengefasst":""}${t.removed&&t.pauses?", ":""}${t.removed?t.removed+" Ausreisser entfernt":""}.</p>`:""}
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
@@ -146,7 +146,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
        await saveTour(n,line?line.map(p=>[p[0],p[1],p[2],null]):null);toast("Als Idee gespeichert");showTour(n.id,true);};
      $("#tGpx",P).onclick=async()=>{const L=await tourLine(t.id);if(!L)return toast("Linie fehlt (noch nicht abgeglichen?)");
        const wp=along.map(x=>({lat:x.p.lat,lon:x.p.lon,ele:x.p.hoehe,name:x.p.name}));download(`${fileSafe(t.name)}.gpx`,toGPX(t.name,L,wp),"application/gpx+xml");};
-     $("#tCond",P).onclick=()=>{const top=prof.length?prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]):null;const c=top||{lat:(t.bbox[0]+t.bbox[2])/2,lon:(t.bbox[1]+t.bbox[3])/2,h:t.emax};openPanel(()=>conditionsPanel(c.lat,c.lon,c.h,t.name));};if($("#tWxTop",P))$("#tWxTop",P).onclick=$("#tCond",P).onclick;
+     $("#tCond",P).onclick=()=>{const top=prof.length?prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]):null;const c=top||{lat:(t.bbox[0]+t.bbox[2])/2,lon:(t.bbox[1]+t.bbox[3])/2,h:t.emax};openPanel(()=>conditionsPanel(c.lat,c.lon,c.h,t.name,{noBul:!!(ARTS[t.art]||{}).bike}));};if($("#tWxTop",P))$("#tWxTop",P).onclick=$("#tCond",P).onclick;
      $("#tChk",P).onclick=()=>openPanel(()=>checklistPanel(t.art));
      const rw=$("#tRaw",P);if(rw)rw.onclick=async()=>{const r=await getOne("raw",t.id);const g=parseGPX(r.gpx);S._selLine=g.pts.map(p=>[p[0],p[1]]);map.render();
        const st=trackStats(g.pts,g.pts.some(p=>p[3]));toast(`Original: ${fmtKm(st.dist)}, ↑${fmtN(st.up)} m, ${fmtDur(st.moving)} in Bewegung`,5000);};
@@ -349,7 +349,7 @@ function planPanel(){const ps=planState;if(!ps)return {title:"Planen",html:`<div
    ${ps.prof&&ps.prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="plProf"></canvas><div class="muted small" id="plProfI">Höhen: swissALTI3D</div></div>`:ps.wps.length>1?`<p class="muted small">${navigator.onLine?"Höhenprofil wird geladen …":"Höhenprofil nur online (swisstopo)"}</p>`:""}
    ${diffHTML(routeDifficulty(ps.segs,ps.art))}
    ${ps.prof?steepHTML(slopeInfo(ps.prof)):""}
-   ${ps.prof&&ps.wps.length>1?checkCard(planCheckKey()):""}
+   ${ps.prof&&ps.wps.length>1?checkCard(planCheckKey(),!!(ARTS[ps.art]||{}).ski):""}
    <div class="card"><div class="crit"><span>Tempo ${(fac*100).toFixed(0)} %<br><small class="muted">${fmtN(t.vf,1)} km/h · ↑${fmtN(t.vu)} · ↓${fmtN(t.vd)} Hm/h</small></span><input type="range" id="plF" min="60" max="150" step="5" value="${Math.round(fac*100)}" style="flex:1;max-width:180px"></div></div>
    <div class="btns"><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
     <button class="btn" id="plRev"${ps.wps.length<2?" disabled":""}>Umkehren</button><button class="btn" id="plZ"${ps.wps.length<2?" disabled":""}>Zurück zum Start</button></div>

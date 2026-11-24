@@ -1,4 +1,4 @@
-BoschorMap – v2.4 (privates Projekt)
+BoschorMap – v2.5 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,10 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v2.5
+- Offline-Regionen: neben «Rechteck» auch «Freie Form» – Punkte rund um das Gebiet antippen, ziehen zum Verschieben, antippen zum Entfernen. Geladen werden nur die Kacheln innerhalb der Form (weniger Speicher, schnellerer Download).
+- Bike- und Gravel-Touren: Wetter-Fenster ohne Lawinenbulletin; Route prüfen nur Wildruhezonen/Jagdbanngebiete.
 
 NEU IN v2.4
 - Lawinenbulletin neu gestaltet wie beim SLF: grosses Farbband mit Gefahrenstufe, Gültig ab / bis / nächstes Update, pro Lawinenproblem eine Karte mit Expositions-Stern, Höhen-Symbol und eigenem Problem-Symbol.

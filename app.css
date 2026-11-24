@@ -157,3 +157,6 @@ button.q.gb{width:100%;background:none;border:0;text-align:left;font:inherit;col
 .bpb{display:flex;gap:12px;padding:10px 12px;align-items:flex-start}.bpb .grow{flex:1;min-width:0}.bpb b{font-size:15px}.bpb p{margin:4px 0 0;font-size:14px;line-height:1.45}
 .bpi{flex:none;width:46px;height:46px;border-radius:10px;background:var(--gl2);display:grid;place-items:center}.bpi svg{width:40px;height:40px}
 .rose2 text{font-family:inherit}.bpi svg{stroke:none}
+.hdl.sm{width:24px;height:24px;margin:-12px 0 0 -12px;border-width:3px}
+.rsrow{display:flex;align-items:center;gap:6px;width:100%}.rsrow .grow{flex:1}.rsrow .btn.sm.ic{padding:6px 8px}.rsrow .btn.sm.ic svg{width:20px;height:20px}.rstx{width:100%;font-size:14px;line-height:1.35}.rstx small{font-size:12.5px}
+.rsrow{flex-wrap:wrap}.rsrow .chip{white-space:nowrap;padding:6px 10px}.rsbt{display:flex;gap:6px;margin-left:auto;align-items:center}

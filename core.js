@@ -1,6 +1,6 @@
 /* BoschorMap – Grundlagen: Hilfsfunktionen, Speicher (IndexedDB), Koordinaten, Konstanten */
 "use strict";
-const APP_VERSION="2.4";
+const APP_VERSION="2.5";
 const LSP="bm_";            /* eigenes localStorage-Präfix – getrennt von IbexMap auf derselben Herkunft */
 const DBN="boschormap",TDBN="boschormap-tiles";
 
@@ -89,8 +89,8 @@ const ARTS={
   wandern:{n:"Wanderung",c:"#d32f2f",prof:"hiking-mountain",t:{vf:4.2,vu:400,vd:800}},
   hochtour:{n:"Hochtour",c:"#7b1fa2",prof:"hiking-mountain",t:{vf:3.5,vu:350,vd:600}},
   winterhochtour:{n:"Winterhochtour",c:"#283593",prof:null,wprof:"hiking-mountain",ski:true,t:{vf:3.5,vu:330,vd:1000}},
-  gravel:{n:"Gravel",c:"#ef6c00",prof:"gravel",t:{vf:20,vu:700,vd:2500}},
-  bike:{n:"Bike (Enduro)",c:"#2e7d32",prof:"mtb",t:{vf:14,vu:550,vd:1500}}};
+  gravel:{n:"Gravel",c:"#ef6c00",bike:true,prof:"gravel",t:{vf:20,vu:700,vd:2500}},
+  bike:{n:"Bike (Enduro)",c:"#2e7d32",bike:true,prof:"mtb",t:{vf:14,vu:550,vd:1500}}};
 const TOUR_CRIT=[["streng","Wie streng"],["schoen","Wie schön"]];
 const SCALES={wandern:["T1","T2","T3","T4","T5","T6"],hochtour:["L","WS","ZS","S","SS","AS"],winterhochtour:["L","WS","ZS","S","SS","AS"],
   skitour:["L","WS","ZS","S","SS","AS"],bike:["S0","S1","S2","S3","S4","S5"],gravel:["leicht","mittel","schwer"]};

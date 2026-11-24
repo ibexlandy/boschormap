@@ -8,9 +8,20 @@ let regionSel=null,dl=null;
 function tileRange(b,z){const n=1<<z;const x0=Math.floor(BMap.lonX(b[1])*n),x1=Math.floor(BMap.lonX(b[3])*n),y0=Math.floor(BMap.latY(b[2])*n),y1=Math.floor(BMap.latY(b[0])*n);return [x0,x1,y0,y1];}
 function regionLayers(r){const out=[];for(const k of r.bases||[]){const b=BASES[k];if(b)out.push({id:b.id,f:b.f,max:Math.min(b.max,r.zmax),kb:b.kb});}
   for(const k of r.ovs||[]){const o=OVERLAYS[k];if(o)for(const id of o.ids)out.push({id,f:"png",max:Math.min(o.max,r.zmax),min:Math.max(ZMIN_OFF,Math.min(o.from,r.zmax)),kb:o.kb});}return out;}
-function regionCount(r){let n=0,kb=0;for(const L of regionLayers(r))for(let z=L.min||ZMIN_OFF;z<=L.max;z++){const [x0,x1,y0,y1]=tileRange(r.bbox,z);const c=(x1-x0+1)*(y1-y0+1);n+=c;kb+=c*(z<12?L.kb*0.8:L.kb);}return {n,mb:kb/1024};}
-function* regionKeys(r){for(const L of regionLayers(r))for(let z=L.min||ZMIN_OFF;z<=L.max;z++){const [x0,x1,y0,y1]=tileRange(r.bbox,z);
-  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)yield {k:`${L.id}/${z}/${x}/${y}`,u:layerUrl(L.id,L.f).replace("{z}",z).replace("{x}",x).replace("{y}",y)};}}
+/* Vieleck: Kachel (x,y) gehört dazu, wenn ihr Mittelpunkt im Vieleck liegt oder näher als eine halbe Kachel-Diagonale an einer Kante */
+function polyTest(poly,z){const n=1<<z;const P=poly.map(q=>[BMap.lonX(q[1])*n,BMap.latY(q[0])*n]);const R2=0.5;
+  return (x,y)=>{const cx=x+.5,cy=y+.5;let ins=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const [xi,yi]=P[i],[xj,yj]=P[j];
+    if(((yi>cy)!==(yj>cy))&&cx<(xj-xi)*(cy-yi)/(yj-yi)+xi)ins=!ins;
+    const dx=xj-xi,dy=yj-yi,L=dx*dx+dy*dy;let t=L?((cx-xi)*dx+(cy-yi)*dy)/L:0;t=t<0?0:t>1?1:t;const ex=xi+t*dx-cx,ey=yi+t*dy-cy;if(ex*ex+ey*ey<=R2)return true;}return ins;};}
+function* zoomTiles(r,z){const [x0,x1,y0,y1]=tileRange(r.bbox,z);const f=r.poly&&r.poly.length>2?polyTest(r.poly,z):null;
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)if(!f||f(x,y))yield [x,y];}
+function zoomCount(r,z){if(!(r.poly&&r.poly.length>2)){const [x0,x1,y0,y1]=tileRange(r.bbox,z);return (x1-x0+1)*(y1-y0+1);}let c=0;for(const _ of zoomTiles(r,z))c++;return c;}
+function regionCount(r){let n=0,kb=0;const zc={};for(const L of regionLayers(r))for(let z=L.min||ZMIN_OFF;z<=L.max;z++){const c=zc[z]??(zc[z]=zoomCount(r,z));n+=c;kb+=c*(z<12?L.kb*0.8:L.kb);}return {n,mb:kb/1024};}
+function* regionKeys(r){for(const L of regionLayers(r))for(let z=L.min||ZMIN_OFF;z<=L.max;z++)for(const [x,y] of zoomTiles(r,z))
+  yield {k:`${L.id}/${z}/${x}/${y}`,u:layerUrl(L.id,L.f).replace("{z}",z).replace("{x}",x).replace("{y}",y)};}
+function polyBBox(P){return [Math.min(...P.map(q=>q[0])),Math.min(...P.map(q=>q[1])),Math.max(...P.map(q=>q[0])),Math.max(...P.map(q=>q[1]))];}
+function polyKm2(P){const la=P.reduce((a,q)=>a+q[0],0)/P.length,kx=111.32*Math.cos(la*RAD),ky=110.57;let A=0;for(let i=0,j=P.length-1;i<P.length;j=i++)A+=(P[j][1]*kx)*(P[i][0]*ky)-(P[i][1]*kx)*(P[j][0]*ky);return Math.abs(A)/2;}
+const regionKm2=r=>r.poly&&r.poly.length>2?polyKm2(r.poly):areaKm2(r.bbox);
 const areaKm2=b=>distM(b[0],b[1],b[0],b[3])/1000*distM(b[0],b[1],b[2],b[1])/1000;
 
 /* ---------- Liste der Regionen und Download-Warteschlange ---------- */
@@ -28,7 +39,7 @@ async function regionsPanel(){const R=(await getAll("regions",await tdb())).sort
    <p class="muted small">${est}</p>`,
    after(P){$("#rNew",P).onclick=startRegionSelect;
      $$("[data-go]",P).forEach(b=>b.onclick=()=>resumeRegion(b.dataset.go));$$("[data-pause]",P).forEach(b=>b.onclick=()=>{if(dl)dl.stop=true;});
-     $$("[data-show]",P).forEach(b=>b.onclick=async()=>{const r=R.find(x=>x.id===b.dataset.show);closePanel();map.fitBounds(r.bbox,30);showFrame(r.bbox);setTimeout(hideFrame,4000);});
+     $$("[data-show]",P).forEach(b=>b.onclick=async()=>{const r=R.find(x=>x.id===b.dataset.show);closePanel();map.fitBounds(r.bbox,30);if(r.poly){S._rpoly=r.poly;map.addDrawer(drawRegionPoly);setTimeout(()=>{S._rpoly=null;map.removeDrawer(drawRegionPoly);},4000);}else{showFrame(r.bbox);setTimeout(hideFrame,4000);}});
      $$("[data-del]",P).forEach(b=>b.onclick=async()=>{const r=R.find(x=>x.id===b.dataset.del);if(!confirm(`Region «${r.name}» auf diesem Gerät löschen?`))return;if(dl&&dl.id===r.id)dl.stop=true;await deleteRegion(r);refreshPanel();});}};}
 
 /* ---------- Ausschnitt wählen (Rahmen mit vier Griffen) ---------- */
@@ -37,24 +48,41 @@ function showFrame(b){hideFrame();frameEl=document.createElement("div");frameEl.
   Object.assign(frameEl.style,{left:a.x+"px",top:a.y+"px",width:(c.x-a.x)+"px",height:(c.y-a.y)+"px"});};frameEl._u=upd;frameEl._b=b;map.on("move",upd);upd();}
 function hideFrame(){if(frameEl){map.off("move",frameEl._u);frameEl.remove();frameEl=null;}frameHandles.forEach(h=>map.removeMarker(h));frameHandles=[];}
 function startRegionSelect(){if(planState)return toast("Zuerst die Planung beenden");storeFree();closePanel();const bb=map.getBounds();const dy=(bb[2]-bb[0])*0.18,dx=(bb[3]-bb[1])*0.15;
-  regionSel={b:[bb[0]+dy,bb[1]+dx,bb[2]-dy,bb[3]-dx],bases:["lk"],ovs:Object.keys(viewPrefs().ov||{}).filter(k=>viewPrefs().ov[k]),zmax:17};
+  regionSel={shape:"rect",rb:[bb[0]+dy,bb[1]+dx,bb[2]-dy,bb[3]-dx],poly:[],pmk:[],b:null,bases:["lk"],ovs:Object.keys(viewPrefs().ov||{}).filter(k=>viewPrefs().ov[k]),zmax:17};regionSel.b=regionSel.rb.slice();
   if(map.z<10)toast("Tipp: zuerst näher an das Gebiet zoomen",3500);
-  showFrame(regionSel.b);const b=regionSel.b;
-  const mk=(i)=>{const pos=[[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]][i];const h=map.addMarker({lat:pos[0],lon:pos[1],anchor:[0,0],drag:true,z:80,html:`<div class="hdl"></div>`});h.corner=i;return h;};
-  frameHandles=[0,1,2,3].map(mk);map.on("markerdrag",onHandleDrag);
-  modebar(`<span class="grow"><b>Ecken ziehen, um den Ausschnitt zu wählen</b><br><small class="muted" id="rsEst"></small></span><button class="btn sm" id="rsX">Abbrechen</button><button class="btn sm pri" id="rsOk">Weiter</button>`);
-  $("#rsX").onclick=endRegionSelect;$("#rsOk").onclick=()=>openPanel(regionFormPanel,{half:true});regionSelEst();}
-function regionSelEst(){const el=$("#rsEst");if(!el||!regionSel)return;const r={bbox:regionSel.b,bases:regionSel.bases,ovs:regionSel.ovs,zmax:regionSel.zmax};const c=regionCount(r);const a=areaKm2(r.bbox);
+  map.on("markerdrag",onHandleDrag);map.on("markerclick",onPolyMkClick);map.addDrawer(drawRegionPoly);setRegionShape("rect");}
+function regionSelR(){const rs=regionSel;return {bbox:rs.b,poly:rs.shape==="poly"?rs.poly:null,bases:rs.bases,ovs:rs.ovs,zmax:rs.zmax};}
+function setRegionShape(sh){const rs=regionSel;rs.shape=sh;hideFrame();rs.pmk.forEach(m=>map.removeMarker(m));rs.pmk=[];
+  if(sh==="rect"){rs.b=rs.rb.slice();showFrame(rs.b);const b=rs.b;
+    const mk=(i)=>{const pos=[[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]][i];const h=map.addMarker({lat:pos[0],lon:pos[1],anchor:[0,0],drag:true,z:80,html:`<div class="hdl"></div>`});h.corner=i;return h;};
+    frameHandles=[0,1,2,3].map(mk);}
+  else{rs.poly.forEach((q,i)=>rs.pmk.push(polyMk(q,i)));polyUpd();}
+  modebar(`<div class="rsrow"><button class="chip${sh==="rect"?" on":""}" data-rsh="rect">Rechteck</button><button class="chip${sh==="poly"?" on":""}" data-rsh="poly">Freie Form</button><span class="rsbt">${sh==="poly"?`<button class="btn sm ic" id="rsU" title="Letzten Punkt entfernen" aria-label="Letzten Punkt entfernen"><svg><use href="#i-undo"/></svg></button>`:""}<button class="btn sm ic" id="rsX" title="Abbrechen" aria-label="Abbrechen"><svg><use href="#i-close"/></svg></button><button class="btn sm pri" id="rsOk">Weiter</button></span></div>
+   <div class="rstx"><b>${sh==="rect"?"Ecken ziehen, um den Ausschnitt zu wählen":"Punkte rund um das Gebiet antippen"}</b> <small class="muted" id="rsEst"></small>${sh==="poly"?`<br><small class="muted">Punkt ziehen = verschieben · antippen = entfernen</small>`:""}</div>`);
+  $$("[data-rsh]").forEach(b=>b.onclick=()=>{if(b.dataset.rsh!==rs.shape)setRegionShape(b.dataset.rsh);});
+  if($("#rsU"))$("#rsU").onclick=polyUndo;
+  $("#rsX").onclick=endRegionSelect;$("#rsOk").onclick=()=>{if(rs.shape==="poly"&&rs.poly.length<3)return toast("Mindestens 3 Punkte setzen");openPanel(regionFormPanel,{half:true});};regionSelEst();map.render();}
+function polyMk(q,i){const m=map.addMarker({lat:q[0],lon:q[1],anchor:[0,0],drag:true,z:80,html:`<div class="hdl sm"></div>`});m.pv=q;return m;}
+function polyUpd(){const rs=regionSel;if(!rs)return;rs.b=rs.poly.length?polyBBox(rs.poly):rs.rb.slice();map.render();clearTimeout(rs._t);rs._t=setTimeout(()=>{const el=$("#rfEst");if(el)el.innerHTML=regionEstHTML();regionSelEst();},120);}
+function polyClick(e){const rs=regionSel,P=rs.poly,q=[e.lat,e.lon];let at=P.length;
+  if(P.length>=3){let best=Infinity;const d=(a,b)=>distM(a[0],a[1],b[0],b[1]);for(let k=0;k<P.length;k++){const a=P[k],b=P[(k+1)%P.length];const c=d(a,q)+d(q,b)-d(a,b);if(c<best){best=c;at=k+1;}}}
+  P.splice(at,0,q);rs.pmk.splice(at,0,polyMk(q,at));(rs.hist||(rs.hist=[])).push(q);polyUpd();}
+function polyRemove(q){const rs=regionSel,k=rs.poly.indexOf(q);if(k<0)return;rs.poly.splice(k,1);map.removeMarker(rs.pmk[k]);rs.pmk.splice(k,1);rs.hist=(rs.hist||[]).filter(x=>x!==q);polyUpd();}
+function polyUndo(){const rs=regionSel;const q=(rs.hist||[]).pop()||rs.poly[rs.poly.length-1];if(q)polyRemove(q);}
+function onPolyMkClick(e){if(regionSel&&regionSel.shape==="poly"&&e.marker.pv)polyRemove(e.marker.pv);}
+function drawRegionPoly(c,m){const P=regionSel&&regionSel.shape==="poly"?regionSel.poly:S._rpoly;if(!P||P.length<2)return;c.beginPath();P.forEach((q,i)=>{const p=m.project(q[0],q[1]);i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y);});
+  if(P.length>2){c.closePath();c.fillStyle="rgba(200,16,46,.10)";c.fill();}c.lineWidth=3;c.lineJoin="round";c.strokeStyle="#c8102e";c.stroke();}
+function regionSelEst(){const el=$("#rsEst");if(!el||!regionSel)return;if(regionSel.shape==="poly"&&regionSel.poly.length<3){el.textContent=`${regionSel.poly.length} von mind. 3 Punkten`;return;}const r=regionSelR();const c=regionCount(r);const a=regionKm2(r);
   const bad=a>LIM_KM2||c.n>LIM_TILES||(stFree!=null&&c.mb>stFree*0.9);el.innerHTML=`${fmtN(a)} km² · ca. ${fmtN(c.mb)} MB · ${durTxt(c.n)}${bad?' · <span style="color:var(--rot)">zu gross</span>':""}`;}
 function durTxt(n){const m=Math.max(1,Math.round(n/TPS/60));return m<60?`ca. ${m} min`:`ca. ${(m/60).toFixed(1)} h`;}
-function onHandleDrag(e){if(!regionSel||e.marker.corner==null)return;const b=regionSel.b,i=e.marker.corner;
+function onHandleDrag(e){if(!regionSel)return;if(e.marker.pv){const q=e.marker.pv;q[0]=e.lat;q[1]=e.lon;polyUpd();return;}if(e.marker.corner==null)return;const b=regionSel.b,i=e.marker.corner;
   if(i===0){b[2]=e.lat;b[1]=e.lon;}else if(i===1){b[2]=e.lat;b[3]=e.lon;}else if(i===2){b[0]=e.lat;b[3]=e.lon;}else{b[0]=e.lat;b[1]=e.lon;}
-  if(b[0]>b[2])[b[0],b[2]]=[b[2],b[0]];if(b[1]>b[3])[b[1],b[3]]=[b[3],b[1]];
+  if(b[0]>b[2])[b[0],b[2]]=[b[2],b[0]];if(b[1]>b[3])[b[1],b[3]]=[b[3],b[1]];regionSel.rb=b.slice();
   const pos=[[b[2],b[1]],[b[2],b[3]],[b[0],b[3]],[b[0],b[1]]];frameHandles.forEach((h,k)=>{if(h!==e.marker)map.moveMarker(h,pos[k][0],pos[k][1]);});frameEl._u();
   clearTimeout(regionSel._t);regionSel._t=setTimeout(()=>{const el=$("#rfEst");if(el)el.innerHTML=regionEstHTML();regionSelEst();},120);}
-function endRegionSelect(){map.off("markerdrag",onHandleDrag);hideFrame();regionSel=null;modebar(null);closePanel();}
-function regionEstHTML(){const r={bbox:regionSel.b,bases:regionSel.bases,ovs:regionSel.ovs,zmax:regionSel.zmax};const c=regionCount(r);const a=areaKm2(r.bbox);
-  const full=stFree!=null&&c.mb>stFree*0.9;const bad=a>LIM_KM2||c.n>LIM_TILES||full;setTimeout(regionSelEst,0);regionSel.ok=!bad&&(r.bases.length+r.ovs.length)>0;
+function endRegionSelect(){map.off("markerdrag",onHandleDrag);map.off("markerclick",onPolyMkClick);map.removeDrawer(drawRegionPoly);hideFrame();if(regionSel)regionSel.pmk.forEach(m=>map.removeMarker(m));regionSel=null;modebar(null);closePanel();}
+function regionEstHTML(){const r=regionSelR();const c=regionCount(r);const a=regionKm2(r);
+  const full=stFree!=null&&c.mb>stFree*0.9;const bad=a>LIM_KM2||c.n>LIM_TILES||full;setTimeout(regionSelEst,0);regionSel.ok=!bad&&(r.bases.length+r.ovs.length)>0&&!(regionSel.shape==="poly"&&regionSel.poly.length<3);
   return `<b>${fmtN(a)} km²</b> · <b>${fmtN(c.n)}</b> Kacheln · ca. <b>${fmtN(c.mb)} MB</b><br><span class="muted">Dauer ${durTxt(c.n)} (je nach Netz)</span>${full?`<div class="st-err">Zu wenig Speicher frei auf dem Gerät (frei ca. ${fmtN(Math.round(stFree))} MB).</div>`:bad?`<div class="st-err">Zu gross – Ausschnitt verkleinern oder Zoomstufe senken (max. ${fmtN(LIM_KM2)} km², ${fmtN(LIM_TILES)} Kacheln).</div>`:c.n>WARN_TILES?`<div class="muted small" style="color:#b26a00">Grosse Region: am besten im WLAN, App dabei offen lassen. Ein unterbrochener Download lässt sich mit «Fortsetzen» dort weiterführen, wo er stehen blieb.</div>`:""}`;}
 function regionFormPanel(){if(!regionSel)return {title:"Region",html:""};const rs=regionSel;
   return {title:"Neue Offline-Region",icon:`<svg><use href="#i-down"/></svg>`,half:true,html:`
@@ -68,7 +96,7 @@ function regionFormPanel(){if(!regionSel)return {title:"Region",html:""};const r
    after(P){const upd=()=>{rs.bases=$$("[data-b]",P).filter(c=>c.checked).map(c=>c.dataset.b);rs.ovs=$$("[data-o]",P).filter(c=>c.checked).map(c=>c.dataset.o);rs.zmax=+$("#rfZ",P).value;$("#rfEst",P).innerHTML=regionEstHTML();};
      $$("input[type=checkbox],select",P).forEach(x=>x.onchange=upd);
      $("#rfGo",P).onclick=async()=>{upd();if(!rs.ok)return toast("Zu gross oder keine Karte gewählt");if(!navigator.onLine)return toast("Kein Internet");
-       const r={id:uid(),name:$("#rfN",P).value.trim()||`Region ${fmtDate(today())}`,bbox:rs.b.map(v=>+v.toFixed(5)),bases:rs.bases,ovs:rs.ovs,zmax:rs.zmax,state:"wait",done:0,bytes:0,created:Date.now()};
+       const r={id:uid(),name:$("#rfN",P).value.trim()||`Region ${fmtDate(today())}`,bbox:rs.b.map(v=>+v.toFixed(5)),poly:rs.shape==="poly"?rs.poly.map(q=>[+q[0].toFixed(5),+q[1].toFixed(5)]):undefined,bases:rs.bases,ovs:rs.ovs,zmax:rs.zmax,state:"wait",done:0,bytes:0,created:Date.now()};
        r.total=regionCount(r).n;await put("regions",r,await tdb());endRegionSelect();toast("Download gestartet");pumpQueue();openPanel(regionsPanel);};}};}
 
 /* ---------- Download (massvoll: 4 gleichzeitig, kurze Pausen, Abbruch jederzeit) ---------- */

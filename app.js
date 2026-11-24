@@ -104,9 +104,9 @@ function hitTour(x,y){let best=null;for(const t of visibleTours()){const bb=t.bb
     if(ll.lat<bb[0]-pad||ll.lat>bb[2]+pad||ll.lon<bb[1]-pad||ll.lon>bb[3]+pad)continue;const L=t.disp;let prev=map.project(L[0][0],L[0][1]);
     for(let i=1;i<L.length;i++){const p=map.project(L[i][0],L[i][1]);const d=segPx(x,y,prev,p);if(d<14&&(!best||d<best.d))best={t,d};prev=p;}}return best&&best.t;}
 function segPx(x,y,a,b){const vx=b.x-a.x,vy=b.y-a.y,L=vx*vx+vy*vy;let t=L?((x-a.x)*vx+(y-a.y)*vy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(x-a.x-t*vx,y-a.y-t*vy);}
-function onMapClick(e){if(placing)return;if(planState)return planClick(e);if(regionSel)return;const t=hitTour(e.x,e.y);if(t){showTour(t.id);return;}
+function onMapClick(e){if(placing)return;if(planState)return planClick(e);if(regionSel){if(regionSel.shape==="poly")polyClick(e);return;}const t=hitTour(e.x,e.y);if(t){showTour(t.id);return;}
   if(nav.length&&$("#sheet").classList.contains("half"))closePanel();}
-function onMarkerClick(e){const mk=e.marker;if(planState&&mk.pid){const p=S.points.find(x=>x.id===mk.pid);if(p)return planClick({lat:p.lat,lon:p.lon,pid:p.id});}
+function onMarkerClick(e){const mk=e.marker;if(regionSel){if(regionSel.shape==="poly"&&!mk.pv)polyClick(e);return;}if(planState&&mk.pid){const p=S.points.find(x=>x.id===mk.pid);if(p)return planClick({lat:p.lat,lon:p.lon,pid:p.id});}
   if(mk.onClick)return mk.onClick(e);if(mk.pid)showPoint(mk.pid);}
 function onLongPress(e){if(planState||placing||regionSel)return;const lat=e.lat,lon=e.lon;setTemp(lat,lon);
   openPanel(async()=>({title:"Ort auf der Karte",half:true,html:`<div class="card"><div class="muted">${lat.toFixed(5)}, ${lon.toFixed(5)} · <span id="lpH">Höhe …</span></div></div>
@@ -343,11 +343,11 @@ function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",h
       $("#sStor",P).innerHTML=`Belegt: <b>${MB(e.usage||0)}</b> von ca. ${MB(e.quota||0)} (gemeinsam für ibexlandy.github.io)<br>${per?"Dauerhaft gespeichert ✓":"Nicht als dauerhaft markiert"}`;}catch(e){}}};}
 
 /* ---------- Bedingungen (Bulletin + Wetter) für einen Ort ---------- */
-async function conditionsPanel(lat,lon,h,name){const b=await bulletinAt(lat,lon);const w=await weatherAt(lat,lon,h);
+async function conditionsPanel(lat,lon,h,name,opt={}){const b=opt.noBul?null:await bulletinAt(lat,lon);const w=await weatherAt(lat,lon,h);
   let st=null;try{const m=await smnStations();if(m)st=pickStations(m.s,lat,lon,h);}catch(e){}const nc=await nowCached();
   const td=w&&w.days.find(d=>d.date===today());const tIc=td&&td.sy?wxIcon(td.sy,30):`<svg><use href="#i-sun"/></svg>`;
-  return {title:name||"Bedingungen",icon:tIc,tools:`<button class="ib" id="cUpdTop" aria-label="Aktualisieren" title="Wetter, Messwerte und Bulletin aktualisieren"><svg><use href="#i-sync"/></svg></button>`,html:weatherHTML(w)+`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
-   <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a><a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a></div>`,
+  return {title:name||"Bedingungen",icon:tIc,tools:`<button class="ib" id="cUpdTop" aria-label="Aktualisieren" title="${opt.noBul?"Wetter und Messwerte":"Wetter, Messwerte und Bulletin"} aktualisieren"><svg><use href="#i-sync"/></svg></button>`,html:weatherHTML(w)+`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+(opt.noBul?"":bulletinHTML(b,h))+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
+   <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a>${opt.noBul?"":`<a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a>`}</div>`,
    async after(P){const upd=async()=>{if(!navigator.onLine)return toast("Kein Internet");const t=$("#cUpdTop",P);if(t)t.classList.add("spin");try{await fetchConditions();}finally{refreshPanel();}};$("#cUpd",P).onclick=upd;$("#cUpdTop",P).onclick=upd;bindBulletin(P);
      if(navigator.onLine){try{if(!st){const m=await smnStations();st=m?pickStations(m.s,lat,lon,h):[];}const c=await fetchNowFor(st);const box=$("#nowBox",P);if(box&&P.contains(box))box.innerHTML=nowHTML(st,c,false);}catch(e){const box=$("#nowBox",P);if(box)box.innerHTML=nowHTML(st,nc,false);}}}};}
 
