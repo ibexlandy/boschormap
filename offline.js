@@ -219,8 +219,7 @@ function weatherHTML(w){if(!w)return `<div class="card"><h3><svg><use href="#i-s
      const k5=Math.round((dt-new Date(today()+"T12:00"))/864e5);const tap=w.pid!=null&&k5>=0&&k5<WXH_DAYS;
      return `<div title="${esc(wxText(d.sy))}"${tap?` class="wxtap" data-wxd="${w.pid}|${d.date}|${w.lat}|${w.lon}" data-wxn="${esc(w.sname||w.name)}" role="button"`:""}><b>${WD[dt.getDay()]} ${dt.getDate()}.${dt.getMonth()+1}.</b>${ic}<div>${fmtN(d.tn)}° / <b style="display:inline">${fmtN(d.tx)}°</b></div>
      <div class="muted">${fmtN(d.rr,1)} mm${d.q90!=null&&d.q90-(d.q10||0)>=0.5?`<br><small>${fmtN(d.q10||0,d.q10<10?1:0)}–${fmtN(d.q90,d.q90<10?1:0)}</small>`:""}</div>
-     <div class="rtrack" title="0–${M} mm">${d.q90!=null?`<i class="rq" style="left:${pc(d.q10||0)}%;width:${Math.max(1.5,pc(d.q90)-pc(d.q10||0))}%"></i>`:""}<i class="rm" style="left:${pc(d.rr||0)}%"></i></div>${d.sy?`<div class="wxt">${esc(wxText(d.sy))}</div>`:""}</div>`;}).join("")}</div>
-   <p class="muted small"><span class="rleg"><i class="rq"></i></span> Niederschlag pro Tag, Skala 0–${M} mm. Tippen auf einen Tag zeigt den Tagesverlauf. Strich = erwarteter Wert${hasQ?", heller Balken = Bandbreite: in 8 von 10 Fällen fällt so viel":""}.<br>Quelle: MeteoSchweiz (Tageswerte, Symbol für den Tag).</p></div>`;}
+     <div class="rtrack" title="0–${M} mm">${d.q90!=null?`<i class="rq" style="left:${pc(d.q10||0)}%;width:${Math.max(1.5,pc(d.q90)-pc(d.q10||0))}%"></i>`:""}<i class="rm" style="left:${pc(d.rr||0)}%"></i></div>${d.sy?`<div class="wxt">${esc(wxText(d.sy))}</div>`:""}</div>`;}).join("")}</div></div>`;}
 
 /* ---------- Jetzt gemessen: SwissMetNet-Stationen (10-Minuten-Werte von heute) ---------- */
 const SMN="https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn";

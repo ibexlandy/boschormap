@@ -143,3 +143,5 @@ button.q.gb{width:100%;background:none;border:0;text-align:left;font:inherit;col
 .rleg{display:inline-block;width:22px;height:8px;border-radius:4px;background:#dbe4ec;position:relative;vertical-align:0}.rleg .rq{position:absolute;left:5px;right:5px;top:0;bottom:0;border-radius:4px;background:#90c2ec}
 .wxtap{cursor:pointer;position:relative}.wxtap:after{content:"";position:absolute;right:7px;top:9px;width:6px;height:6px;border-right:2px solid #8aa0b2;border-bottom:2px solid #8aa0b2;transform:rotate(-45deg)}
 .wxh3{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;text-align:center;margin-bottom:6px}.wxh3>div{display:flex;flex-direction:column;align-items:center;font-size:11px}.wxh3 b{font-size:11px;color:#1e88e5}.wxh3 svg{width:28px;height:28px}
+@keyframes bmspin{to{transform:rotate(360deg)}}.ib.spin svg{animation:bmspin 1s linear infinite}
+.ph h2:has(+.wxb){flex:0 1 auto}.wxb+.ib{margin-left:auto}.ib.wxb svg{width:28px;height:28px}

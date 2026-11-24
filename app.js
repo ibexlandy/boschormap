@@ -192,7 +192,8 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(!p)return {
   const k=CATS[p.cat]||CATS.ort;const vis=(p.visits||[]).slice().sort((a,b)=>String(b.d).localeCompare(String(a.d)));
   const near=S.tours.filter(t=>!t.del&&t.bbox&&p.lat>t.bbox[0]-0.01&&p.lat<t.bbox[2]+0.01&&p.lon>t.bbox[1]-0.01&&p.lon<t.bbox[3]+0.01&&distLine(p.lat,p.lon,t.disp)<150).slice(0,8);
   const ph=p.photos||[];
-  return {title:p.name||k.n,icon:catIc(p.cat),half:true,html:`
+  const wx=await weatherAt(p.lat,p.lon,p.hoehe).catch(()=>null);const wd=wx&&wx.days.find(d=>d.date===today());
+  return {title:p.name||k.n,icon:catIc(p.cat),half:true,tools:wd&&wd.sy?`<button class="ib wxb" id="pWxTop" aria-label="Wetter heute: ${esc(wxText(wd.sy))}" title="Wetter heute: ${esc(wxText(wd.sy))} – antippen für Prognose und Bulletin">${wxIcon(wd.sy,28)}</button>`:"",html:`
    <div class="card"><div class="row"><span class="tag">${k.n}</span>${p.cat==="gipfel"?`<span class="tag" style="background:${vis.length?"#e8f5e9":"#fff3e0"};color:${vis.length?"#2e7d32":"#b26a00"}">${vis.length?`schon oben (${vis.length}×)`:"noch offen"}</span>`:""}
     <span class="grow"></span><b>${p.hoehe!=null?fmtN(p.hoehe)+" m":""}</b></div>
     ${(p.rate||{}).gesamt?`<div class="crit"><span>Gesamt</span>${starsHTML(p.rate.gesamt,"",1)}</div>`:""}
@@ -212,7 +213,7 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(!p)return {
          for(const x of fl){progress("Fotos speichern",n,fl.length);try{const id=await storePhoto(x,p.id);p.photos=(p.photos||[]).concat(id);n++;}catch(e){bad++;}}
          progressDone();if(n)await savePoint(p);toast(bad?`${n} gespeichert, ${bad} nicht lesbar (Format HEIF? In der Samsung-Kamera «Bilder mit hoher Effizienz» ausschalten)`:`${n} Foto${n>1?"s":""} gespeichert`,bad?7000:2500);refreshPanel();};f.click();};
      $("#pPl",P).onclick=()=>{closePanel();startPlan({start:[p.lat,p.lon],pid:p.id});};
-     $("#pWx",P).onclick=()=>openPanel(()=>conditionsPanel(p.lat,p.lon,p.hoehe,p.name));
+     $("#pWx",P).onclick=()=>openPanel(()=>conditionsPanel(p.lat,p.lon,p.hoehe,p.name));if($("#pWxTop",P))$("#pWxTop",P).onclick=$("#pWx",P).onclick;
      $("#pDel",P).onclick=async()=>{if(!confirm(`«${p.name}» löschen? (bleibt 30 Tage im Papierkorb)`))return;p.del=Date.now();await savePoint(p);closePanel();toast("Gelöscht – im Papierkorb");};
      $("#vAdd",P).onclick=async()=>{const d=$("#vD",P).value;if(!d)return;p.visits=(p.visits||[]).concat({d,note:$("#vN",P).value.trim()});await savePoint(p);refreshPanel();};
      $$("[data-delv]",P).forEach(b=>b.onclick=async()=>{const [d,n]=b.dataset.delv.split("|");if(!confirm("Besuch vom "+fmtDate(d)+" löschen?"))return;
@@ -345,9 +346,9 @@ function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",h
 async function conditionsPanel(lat,lon,h,name){const b=await bulletinAt(lat,lon);const w=await weatherAt(lat,lon,h);
   let st=null;try{const m=await smnStations();if(m)st=pickStations(m.s,lat,lon,h);}catch(e){}const nc=await nowCached();
   const td=w&&w.days.find(d=>d.date===today());const tIc=td&&td.sy?wxIcon(td.sy,30):`<svg><use href="#i-sun"/></svg>`;
-  return {title:name||"Bedingungen",icon:tIc,html:weatherHTML(w)+`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
+  return {title:name||"Bedingungen",icon:tIc,tools:`<button class="ib" id="cUpdTop" aria-label="Aktualisieren" title="Wetter, Messwerte und Bulletin aktualisieren"><svg><use href="#i-sync"/></svg></button>`,html:weatherHTML(w)+`<div id="nowBox">${nowHTML(st,nc,!!(st&&navigator.onLine))}</div>`+bulletinHTML(b,h)+`<div class="btns"><button class="btn" id="cUpd"><svg><use href="#i-sync"/></svg>Jetzt aktualisieren</button>
    <a class="btn" href="https://www.meteoschweiz.admin.ch/#tab=forecast-map" target="_blank" rel="noopener">MeteoSchweiz</a><a class="btn" href="https://www.slf.ch/de/lawinenbulletin-und-schneesituation/" target="_blank" rel="noopener">SLF</a></div>`,
-   async after(P){$("#cUpd",P).onclick=async()=>{if(!navigator.onLine)return toast("Kein Internet");await fetchConditions();refreshPanel();};bindBulletin(P);
+   async after(P){const upd=async()=>{if(!navigator.onLine)return toast("Kein Internet");const t=$("#cUpdTop",P);if(t)t.classList.add("spin");try{await fetchConditions();}finally{refreshPanel();}};$("#cUpd",P).onclick=upd;$("#cUpdTop",P).onclick=upd;bindBulletin(P);
      if(navigator.onLine){try{if(!st){const m=await smnStations();st=m?pickStations(m.s,lat,lon,h):[];}const c=await fetchNowFor(st);const box=$("#nowBox",P);if(box&&P.contains(box))box.innerHTML=nowHTML(st,c,false);}catch(e){const box=$("#nowBox",P);if(box)box.innerHTML=nowHTML(st,nc,false);}}}};}
 
 /* ---------- Start ---------- */
