@@ -277,13 +277,31 @@ async function showGallery(ids,start,go_){ids=(ids||[]).filter(Boolean);if(!ids.
   w.addEventListener("pointerup",up);w.addEventListener("pointercancel",up);show();}
 
 /* ---------- Suche: eigene Orte und Touren, gespeicherte Namen (offline), geo.admin (online) ---------- */
-function searchPanel(){return {title:"Suchen",icon:`<svg><use href="#i-search"/></svg>`,html:`<input class="inp" id="sq" placeholder="Gipfel, Hütte, Ort, Tour …" autocomplete="off" enterkeyhint="search"><div id="sres" style="margin-top:10px"></div>`,
+const normS=x=>String(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+/* Koordinaten erkennen: LV95 (2'600'000 / 1'200'000), LV03 (600000 / 200000), WGS84 dezimal (46.5, 8.1) oder Grad/Minuten/Sekunden */
+function parseCoord(s){const t=s.replace(/[’'`´]/g,"").trim();
+  const dms=[...t.matchAll(/(\d{1,2})\s*°\s*(?:(\d{1,2}(?:\.\d+)?)\s*[′']?\s*(?:(\d{1,2}(?:\.\d+)?)\s*["″]?)?)?\s*([NSEOW])?/gi)];
+  let a,b;if(dms.length>=2){const v=m=>+m[1]+(+(m[2]||0))/60+(+(m[3]||0))/3600;a=v(dms[0]);b=v(dms[1]);}
+  else{const n=t.match(/^[NE]?\s*(-?\d+(?:\.\d+)?)\s*[,;/\s]\s*[NE]?\s*(-?\d+(?:\.\d+)?)\s*$/i);if(!n)return null;a=+n[1];b=+n[2];}
+  const ok=(la,lo)=>la>45.6&&la<48&&lo>5.7&&lo<10.7;
+  const lv=(E,N)=>{const [la,lo]=fromLV95(E,N);return ok(la,lo)?{lat:la,lon:lo,label:`LV95 ${fmtN(Math.round(E))} / ${fmtN(Math.round(N))}`}:null;};
+  if(a>2e6&&b>1e6&&a<3e6&&b<2e6)return lv(a,b);if(b>2e6&&a>1e6&&b<3e6&&a<2e6)return lv(b,a);
+  if(a>4e5&&a<9e5&&b>4e4&&b<4e5)return lv(a+2e6,b+1e6);if(b>4e5&&b<9e5&&a>4e4&&a<4e5)return lv(b+2e6,a+1e6);
+  const w=(la,lo)=>{const [E,N]=toLV95(la,lo);return {lat:la,lon:lo,label:`LV95 ${fmtN(Math.round(E))} / ${fmtN(Math.round(N))}`};};if(ok(a,b))return w(a,b);if(ok(b,a))return w(b,a);return null;}
+function searchPanel(){return {title:"Suchen",icon:`<svg><use href="#i-search"/></svg>`,html:`<input class="inp" id="sq" placeholder="Gipfel, Hütte, Ort, Tour, Notiz, Koordinate …" autocomplete="off" enterkeyhint="search"><div id="sres" style="margin-top:10px"></div>`,
   after(P){const q=$("#sq",P);setTimeout(()=>q.focus(),200);let tm,seq=0;
     q.oninput=()=>{clearTimeout(tm);tm=setTimeout(async()=>{const s=q.value.trim();const my=++seq;const out=$("#sres",P);if(s.length<2){out.innerHTML="";return;}const lo=s.toLowerCase();
-      const own=S.points.filter(p=>!p.del&&(p.name||"").toLowerCase().includes(lo)).slice(0,15);const tr=S.tours.filter(t=>!t.del&&(t.name||"").toLowerCase().includes(lo)).slice(0,10);
-      let html=own.map(p=>`<button class="li" data-p="${p.id}">${catIc(p.cat)}<span class="t"><b>${esc(p.name)}</b><small>Mein Ort${p.hoehe?" · "+fmtN(p.hoehe)+" m":""}</small></span></button>`).join("")+
-        tr.map(t=>`<button class="li" data-t="${t.id}">${artIc(t.art)}<span class="t"><b>${esc(t.name)}</b><small>${t.status==="idee"?"Touridee":"Tour "+fmtDate(t.date)}</small></span></button>`).join("");
-      out.innerHTML=html+`<div id="snames"></div>`;bindRes(out);
+      const nq=normS(s);const hit=x=>x&&normS(x).includes(nq);
+      const snip=(x,src)=>{const n=normS(x),i=n.indexOf(nq);if(i<0)return "";const a=Math.max(0,i-30),e=Math.min(x.length,i+nq.length+40);
+        return `<span class="snip">${src}: ${a?"…":""}${esc(x.slice(a,i))}<mark>${esc(x.slice(i,i+nq.length))}</mark>${esc(x.slice(i+nq.length,e))}${e<x.length?"…":""}</span>`;};
+      const own=[];for(const p of S.points){if(p.del)continue;let sn="";if(hit(p.name))sn=" ";else if(hit(p.note))sn=snip(p.note,"Beschreibung");else{const v=(p.visits||[]).find(v=>hit(v.note));if(v)sn=snip(v.note,"Gipfelbuch "+fmtDate(v.d));}
+        if(sn)own.push([p,sn]);if(own.length>=25)break;}
+      const tr=[];for(const t of S.tours){if(t.del)continue;let sn="";if(hit(t.name))sn=" ";else if(hit(t.note))sn=snip(t.note,"Notiz");if(sn)tr.push([t,sn]);if(tr.length>=15)break;}
+      const co=parseCoord(s);
+      let html=(co?`<button class="li" data-ll="${co.lat},${co.lon}" data-nm="${esc(co.label)}" data-kind="Koordinate"><span class="ic" style="background:#24507a"><svg><use href="#i-locate"/></svg></span><span class="t"><b>${esc(co.label)}</b><small>Koordinate · ${co.lat.toFixed(5)}, ${co.lon.toFixed(5)}</small></span></button>`:"")+
+        own.map(([p,sn])=>`<button class="li" data-p="${p.id}">${catIc(p.cat)}<span class="t"><b>${esc(p.name)}</b><small>Mein Ort${p.hoehe?" · "+fmtN(p.hoehe)+" m":""}</small>${sn.trim()?sn:""}</span></button>`).join("")+
+        tr.map(([t,sn])=>`<button class="li" data-t="${t.id}">${artIc(t.art)}<span class="t"><b>${esc(t.name)}</b><small>${t.status==="idee"?"Touridee":"Tour "+fmtDate(t.date)}</small>${sn.trim()?sn:""}</span></button>`).join("");
+      out.innerHTML=html+`<div id="snames"></div>`;bindRes(out);if(co)return;
       const names=await searchOfflineNames(lo);if(my!==seq)return;const seen=new Set();
       let nh=names.slice(0,25).map(n=>{seen.add(n.name+"|"+Math.round(n.lat*100));return resRow(n,"offline gespeichert");}).join("");
       if(navigator.onLine){try{const r=await fetch(`https://api3.geo.admin.ch/rest/services/api/SearchServer?searchText=${encodeURIComponent(s)}&type=locations&sr=4326&limit=20&lang=de`);const j=await r.json();if(my!==seq)return;

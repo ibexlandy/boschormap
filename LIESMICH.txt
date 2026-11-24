@@ -1,4 +1,4 @@
-BoschorMap – v2.6 (privates Projekt)
+BoschorMap – v2.7 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,10 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v2.7
+- Suche: findet auch Text in Beschreibungen, Gipfelbuch-Notizen und Tour-Notizen (mit Textausschnitt), ohne Rücksicht auf Akzente.
+- Suche: Koordinaten eingeben – LV95 (2'600'000 / 1'200'000), LV03 (600000 / 200000), Dezimalgrad (46.5, 8.1) oder Grad/Minuten/Sekunden – springt direkt an die Stelle.
 
 NEU IN v2.6
 - Karte: Verschieben und Herauszoomen nur noch so weit, dass kein grauer Rand ausserhalb der Karte sichtbar wird.
