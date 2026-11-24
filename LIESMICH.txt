@@ -1,4 +1,4 @@
-Boschor Map – v1.13 (privates Projekt)
+BoschorMap – v2.0 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -29,19 +29,19 @@ Inhalt des Ordners
   Die App startet ohne Internet und zeigt alle gespeicherten Daten und Regionen.
 
 3) Google Drive (Abgleich zwischen den Geräten) – eigenes Google-Konto, eigenes Projekt
-  a) Im separaten Google-Konto für Boschor Map anmelden: https://console.cloud.google.com
-  b) Neues Projekt anlegen, Name z. B. «Boschor Map».
+  a) Im separaten Google-Konto für BoschorMap anmelden: https://console.cloud.google.com
+  b) Neues Projekt anlegen, Name z. B. «BoschorMap».
   c) APIs & Dienste › Bibliothek › «Google Drive API» › Aktivieren.
-  d) Google Auth Platform › Branding: App-Name «Boschor Map», Support-E-Mail = dieses Konto.
+  d) Google Auth Platform › Branding: App-Name «BoschorMap», Support-E-Mail = dieses Konto.
   e) Google Auth Platform › Zielgruppe: «Extern», Status «Test». Unter Testnutzer dieses Konto eintragen.
-  f) Google Auth Platform › Clients › Client erstellen › Typ «Webanwendung», Name «Boschor Map».
+  f) Google Auth Platform › Clients › Client erstellen › Typ «Webanwendung», Name «BoschorMap».
        Autorisierte JavaScript-Quellen:   https://ibexlandy.github.io
        Autorisierte Weiterleitungs-URIs:  https://ibexlandy.github.io/boschormap/
      Erstellen › die Client-ID kopieren (endet auf .apps.googleusercontent.com).
      Ein Clientschlüssel (Secret) wird nicht gebraucht.
-  g) In Boschor Map: Mehr › Google Drive › Client-ID einfügen › «Speichern und verbinden»
+  g) In BoschorMap: Mehr › Google Drive › Client-ID einfügen › «Speichern und verbinden»
      › mit dem Boschor-Konto anmelden. Auf jedem Gerät einmal.
-  Die Daten liegen im versteckten App-Ordner dieses Kontos (nur für Boschor Map sichtbar).
+  Die Daten liegen im versteckten App-Ordner dieses Kontos (nur für BoschorMap sichtbar).
   Änderungen werden automatisch abgeglichen (abschaltbar); das Symbol oben rechts gleicht sofort ab.
 
 4) Sicherung
@@ -52,6 +52,20 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v2.0
+- Aufgeräumt: nur noch ein Menü («Mehr», in Gruppen), Reiter «Vorschläge», Touren «Gemacht / Geplant» mit +-Knopf,
+  Einstieg beim ersten Start, +/− auf dem Handy ausgeblendet, Tourname beim Import aus dem höchsten Gipfel.
+- Sicherheit: Content-Security-Policy, nur Suunto-Links werden automatisch geladen, Sicherung optional mit Passwort
+  verschlüsselt (.bmsafe), Grenze für GPX-Dateien (40 MB), Google-Anmeldung nur für die laufende Sitzung.
+- «Route prüfen» (Tour und Planung): Lawinen-Check (Hänge über 30° an der Route × Exposition/Höhe der Lawinenprobleme
+  im Bulletin) und Wildruhezonen/Jagdbanngebiete mit Bestimmung und Schutzzeit.
+- Gipfelbuch und Heatmap (Mehr › Rückblick).
+- Besuchte Orte: grüner Ring mit kleinem Haken (alle Kategorien).
+- Wetter: Niederschlag mit Bandbreite und gemeinsamer Skala; Tippen auf einen der nächsten 5 Tage zeigt den
+  Tagesverlauf (Symbole, Wahrscheinlichkeit, Niederschlag pro Stunde, Böen, Tageslicht) – auch offline.
+- Name überall «BoschorMap».
+- Nach dem Update: Die App fragt einmal nach Google (Anmeldung gilt neu nur pro Sitzung).
 
 NEU IN v1.13
 - Steilheit statt einzelnem «steilstem Punkt»: Farbbalken mit km pro Klasse (unter 15°, 15–25°, 25–30°, 30–35°,
@@ -92,20 +106,20 @@ NEU IN v1.9
 - PC: Mauszeiger passend (Pfeil, Fadenkreuz beim Planen, Hand beim Ziehen).
 
 NEU IN v1.8
-- Suunto teilt einen Link statt einer Datei: Boschor Map lädt das GPX-Workout jetzt selbst über diesen Link
+- Suunto teilt einen Link statt einer Datei: BoschorMap lädt das GPX-Workout jetzt selbst über diesen Link
   (Internet nötig) und öffnet den Import. Klappt es nicht, zeigt die App an, was angekommen ist.
-- Teilen nimmt jeden Dateityp an; Boschor Map prüft selbst, ob es GPX oder ein Foto ist.
+- Teilen nimmt jeden Dateityp an; BoschorMap prüft selbst, ob es GPX oder ein Foto ist.
 - Namen auf der Karte als dunkles Schild mit weisser Schrift und Farbstreifen der Kategorie – gut lesbar
   auch auf Winterkarte und Luftbild.
 - Ebenen (Hangneigung, Skitouren, Wildruhezonen usw.) liegen jetzt unter den eigenen Orten, Linien und Knöpfen.
-- Nach dem Update Boschor Map einmal deinstallieren und in Chrome neu installieren (Teilen-Menü geändert,
+- Nach dem Update BoschorMap einmal deinstallieren und in Chrome neu installieren (Teilen-Menü geändert,
   Daten bleiben erhalten).
 
 NEU IN v1.7
-- Direkt an Boschor Map teilen (Android): in der Suunto-App «GPX-Workout exp.» › Boschor Map – der GPX-Import
-  öffnet sich sofort. Auch Fotos aus der Galerie lassen sich teilen. Hinweis: Damit Boschor Map im Teilen-Menü
+- Direkt an BoschorMap teilen (Android): in der Suunto-App «GPX-Workout exp.» › BoschorMap – der GPX-Import
+  öffnet sich sofort. Auch Fotos aus der Galerie lassen sich teilen. Hinweis: Damit BoschorMap im Teilen-Menü
   erscheint, die App einmal deinstallieren und in Chrome neu installieren (Daten bleiben erhalten).
-- PC: .gpx-Dateien mit «Öffnen mit › Boschor Map» direkt öffnen.
+- PC: .gpx-Dateien mit «Öffnen mit › BoschorMap» direkt öffnen.
 - Neue, moderne Ortssymbole (Linien-Piktogramme); Gipfel «schon oben» mit grünem Punkt, «noch offen» gestrichelt.
 
 NEU IN v1.6

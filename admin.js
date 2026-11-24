@@ -1,4 +1,4 @@
-/* Boschor Map – Verwaltung am PC: sortierbare, filterbare Tabelle mit direktem Bearbeiten, Mehrfachauswahl und CSV */
+/* BoschorMap – Verwaltung am PC: sortierbare, filterbare Tabelle mit direktem Bearbeiten, Mehrfachauswahl und CSV */
 "use strict";
 let adm={tab:"tours",sort:"date",dir:-1,q:"",f:"",st:"",sel:new Set()};
 function showAdmin(){closePanel();let w=$(".tbl-wrap");if(!w){w=document.createElement("div");w.className="tbl-wrap";document.body.appendChild(w);}renderAdmin();}
@@ -26,7 +26,7 @@ function renderAdmin(){const w=$(".tbl-wrap");if(!w)return;const cols=admCols(),
     if(c.ed==="art")return `<select data-e="art" data-id="${id}">${artOpts(v)}</select>`;
     if(c.ed==="status")return `<select data-e="status" data-id="${id}"><option value="gemacht"${v==="gemacht"?" selected":""}>Gemacht</option><option value="idee"${v==="idee"?" selected":""}>Idee</option></select>`;
     return esc(c.fmt?c.fmt(v):c.num&&v!==""&&v!=null?fmtN(v):v==null?"":v);};
-  w.innerHTML=`<div class="tbl-top"><svg class="logo"><use href="#i-logo"/></svg><b style="font-size:17px">Boschor Map – Verwaltung</b><span class="grow" style="flex:1"></span>
+  w.innerHTML=`<div class="tbl-top"><svg class="logo"><use href="#i-logo"/></svg><b style="font-size:17px">BoschorMap – Verwaltung</b><span class="grow" style="flex:1"></span>
     <button class="chip${!pts?" on":""}" data-tab="tours">Touren</button><button class="chip${pts?" on":""}" data-tab="points">Orte</button><button class="btn sm" id="aX">Schliessen</button></div>
    <div class="tbl-tools"><input class="inp" id="aQ" placeholder="Suchen …" value="${esc(adm.q)}" style="max-width:220px">
     <select class="inp" id="aF" style="width:auto"><option value="">${pts?"Alle Kategorien":"Alle Arten"}</option>${(pts?Object.entries(CATS):Object.entries(ARTS)).map(([k,o])=>`<option value="${k}"${adm.f===k?" selected":""}>${o.n}</option>`).join("")}</select>

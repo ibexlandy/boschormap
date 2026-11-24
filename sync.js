@@ -1,4 +1,4 @@
-/* Boschor Map – Google-Drive-Abgleich (appDataFolder, eigenes Konto), Sicherung, Papierkorb, Foto-Import */
+/* BoschorMap – Google-Drive-Abgleich (appDataFolder, eigenes Konto), Sicherung, Papierkorb, Foto-Import */
 "use strict";
 const GD_SCOPE="https://www.googleapis.com/auth/drive.appdata",GD_DATA="bm_daten.json",GD_BC="boschormap-gauth";
 let gdToken=null,gdExp=0,syncing=false,autoTm=0;
@@ -8,22 +8,24 @@ const GD_REDIRECT=()=>location.origin+location.pathname.replace(/index\.html$/,"
 function gdPopupReturn(){const h=location.hash;if(!/access_token=|error=/.test(h))return false;const q=new URLSearchParams(h.slice(1));const pop=ls("gpopup")||"";if(!pop||q.get("state")!==pop)return false;
   const want=ls("gstate");ls("gpopup",null);ls("gstate",null);let msg;
   if(q.get("state")!==want)msg={err:"state"};else if(q.get("error"))msg={err:q.get("error")};
-  else{const exp=Date.now()+(+q.get("expires_in")||3600)*1000;ls("gtok",JSON.stringify({tok:q.get("access_token"),exp}));ls("gconn","1");msg={ok:1};}
+  else{const exp=Date.now()+(+q.get("expires_in")||3600)*1000;ls("gconn","1");msg={ok:1,tok:q.get("access_token"),exp};}
   msg.t=Date.now();try{new BroadcastChannel(GD_BC).postMessage(msg);}catch(e){}ls("gauthmsg",JSON.stringify(msg));history.replaceState(null,"",location.pathname);
-  document.body.innerHTML=`<p style="font:16px system-ui;padding:24px">${msg.ok?"Angemeldet – dieses Fenster schliesst sich.":"Anmeldung nicht möglich – Fenster schliessen und in Boschor Map nochmals abgleichen."}</p>`;
+  document.body.innerHTML=`<p style="font:16px system-ui;padding:24px">${msg.ok?"Angemeldet – dieses Fenster schliesst sich.":"Anmeldung nicht möglich – Fenster schliessen und in BoschorMap nochmals abgleichen."}</p>`;
   setTimeout(()=>{try{window.close();}catch(e){}},msg.ok?200:4000);return true;}
-function gdRestore(){const t=lsJ("gtok",null);if(t&&Date.now()<t.exp-60000){gdToken=t.tok;gdExp=t.exp;}}
+/* Zugriffs-Token nur für die laufende Sitzung halten (nicht dauerhaft im Gerätespeicher) */
+function tokSave(tok,exp){try{tok?sessionStorage.setItem("bm_gtok",JSON.stringify({tok,exp})):sessionStorage.removeItem("bm_gtok");}catch(e){}}
+function gdRestore(){ls("gtok",null);let t=null;try{t=JSON.parse(sessionStorage.getItem("bm_gtok")||"null");}catch(e){}if(t&&Date.now()<t.exp-60000){gdToken=t.tok;gdExp=t.exp;}}
 function gdFromRedirect(){if(!/access_token=|error=/.test(location.hash))return false;const q=new URLSearchParams(location.hash.slice(1));history.replaceState(null,"",location.pathname+location.search);
   const want=ls("gstate");ls("gstate",null);if(!want||q.get("state")!==want){toast("Google-Anmeldung abgelehnt (nicht von diesem Gerät gestartet)",6000);return false;}
   if(q.get("error")){toast("Google-Anmeldung abgebrochen: "+q.get("error"),6000);return false;}
-  gdToken=q.get("access_token");gdExp=Date.now()+(+q.get("expires_in")||3600)*1000;ls("gconn","1");ls("gtok",JSON.stringify({tok:gdToken,exp:gdExp}));return true;}
+  gdToken=q.get("access_token");gdExp=Date.now()+(+q.get("expires_in")||3600)*1000;ls("gconn","1");tokSave(gdToken,gdExp);return true;}
 const gdOk=()=>gdToken&&Date.now()<gdExp-60000;
 function gdState(){const v=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,"0")).join("");ls("gstate",v);return v;}
 const standalone=()=>{try{return matchMedia("(display-mode: standalone)").matches;}catch(e){return false;}};
 function gdUrl(st,prompt){const u=new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.search=new URLSearchParams(Object.assign({client_id:gdClient(),redirect_uri:GD_REDIRECT(),response_type:"token",scope:GD_SCOPE,include_granted_scopes:"true",state:st,prompt},ls("gmail")?{login_hint:ls("gmail")}:{})).toString();return u.toString();}
 function popupWait(w){return new Promise((res,rej)=>{let done=false,bc=null;const t0=Date.now();
-  const fin=m=>{if(done||!m||!m.t||m.t<t0)return;done=true;clearInterval(iv);try{bc&&bc.close();}catch(e){}m.ok?res():rej(new Error(m.err||"abgebrochen"));};
+  const fin=m=>{if(done||!m||!m.t||m.t<t0)return;done=true;clearInterval(iv);ls("gauthmsg",null);try{bc&&bc.close();}catch(e){}if(m.ok&&m.tok){gdToken=m.tok;gdExp=m.exp;tokSave(m.tok,m.exp);}m.ok?res():rej(new Error(m.err||"abgebrochen"));};
   try{bc=new BroadcastChannel(GD_BC);bc.onmessage=e=>fin(e.data);}catch(e){}
   const iv=setInterval(()=>{fin(lsJ("gauthmsg",null));try{if(w.closed&&!done&&Date.now()-t0>1500)setTimeout(()=>{if(!done){done=true;clearInterval(iv);rej(new Error("Fenster geschlossen"));}},1200);}catch(e){}
     if(Date.now()-t0>180000&&!done){done=true;clearInterval(iv);rej(new Error("Zeit abgelaufen"));}},500);});}
@@ -32,7 +34,7 @@ async function gdAuth(force){if(!force&&gdOk())return gdToken;if(!gdClient())thr
     if(w){toast("Google-Anmeldung …",4000);try{await popupWait(w);gdRestore();if(gdOk())return gdToken;}catch(e){ls("gpopup",null);if(!/interaction_required|login_required|consent_required/.test(e.message))throw new Error("Anmeldung nicht abgeschlossen ("+e.message+")");}}else ls("gpopup",null);}
   toast("Weiter zur Google-Anmeldung …",4000);try{sessionStorage.setItem("bm_after_login","sync");}catch(e){}location.href=gdUrl(gdState(),ls("gconn")&&!force?"none":"select_account");return new Promise(()=>{});}
 async function gd(path,opt){const t=await gdAuth();const r=await fetch("https://www.googleapis.com/"+path,Object.assign({},opt||{},{headers:Object.assign({Authorization:"Bearer "+t},(opt||{}).headers||{})}));
-  if(r.status===401){gdToken=null;ls("gtok",null);throw new Error("Anmeldung abgelaufen – nochmals abgleichen");}if(!r.ok)throw new Error("Google Drive: Fehler "+r.status);return r;}
+  if(r.status===401){gdToken=null;tokSave(null);throw new Error("Anmeldung abgelaufen – nochmals abgleichen");}if(!r.ok)throw new Error("Google Drive: Fehler "+r.status);return r;}
 async function gdList(){let out=[],pt="";do{const r=await(await gd(`drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(id,name,size,appProperties,modifiedTime)${pt?"&pageToken="+encodeURIComponent(pt):""}`)).json();out=out.concat(r.files||[]);pt=r.nextPageToken||"";}while(pt);return out;}
 async function gdUpload(name,blob,id,props){const fd=new FormData();const md=id?{}:{name,parents:["appDataFolder"]};if(props)md.appProperties=props;
   fd.append("metadata",new Blob([JSON.stringify(md)],{type:"application/json"}));fd.append("file",blob);await gd(`upload/drive/v3/files${id?"/"+id:""}?uploadType=multipart`,{method:id?"PATCH":"POST",body:fd});}
@@ -83,7 +85,7 @@ async function syncDrive(quiet){if(syncing)return;if(!gdClient()){if(!quiet)open
   finally{syncing=false;btn.classList.remove("spin");progressDone();}}
 function drivePanel(){const c=gdClient(),con=gdOk(),last=+ls("lastsync")||0;
   return {title:"Google Drive",icon:`<svg><use href="#i-sync"/></svg>`,html:`
-   <div class="note">Boschor Map verwendet ein <b>eigenes Google-Konto</b> und ein eigenes Google-Cloud-Projekt – getrennt von IbexMap. Die Daten liegen im versteckten App-Ordner dieses Kontos.</div>
+   <div class="note">BoschorMap verwendet ein <b>eigenes Google-Konto</b> und ein eigenes Google-Cloud-Projekt – getrennt von IbexMap. Die Daten liegen im versteckten App-Ordner dieses Kontos.</div>
    <div class="card"><h3>Einrichtung (einmal pro Gerät)</h3><label class="f">OAuth-Client-ID</label><input class="inp" id="gC" value="${esc(c)}" placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false">
     <p class="muted small">Weiterleitungs-URI für die Google Cloud: <b>${esc(GD_REDIRECT())}</b></p><button class="btn pri full" id="gSave">Speichern und verbinden</button></div>
    ${c?`<div class="card"><h3>Status</h3><p>${con?"Verbunden":"Nicht angemeldet"}${ls("gmail")?` als <b>${esc(ls("gmail"))}</b>`:""}<br><small class="muted">Letzter Abgleich: ${last?fmtDT(last):"noch nie"}</small></p>
@@ -91,28 +93,46 @@ function drivePanel(){const c=gdClient(),con=gdOk(),last=+ls("lastsync")||0;
     <label class="tg" style="margin-top:8px"><span>Automatisch abgleichen (nach Änderungen und beim Start)</span><span class="sw2"><input type="checkbox" id="gA"${ls("autosync")!=="0"?" checked":""}><i></i></span></label></div>`:""}`,
    after(P){$("#gSave",P).onclick=()=>{const v=$("#gC",P).value.trim();if(v&&!/\.apps\.googleusercontent\.com$/.test(v))return toast("Das sieht nicht nach einer Client-ID aus");ls("gclient",v||null);ls("gconn",null);
        $("#bSync").hidden=!v;if(v)syncDrive(false);else refreshPanel();};
-     const s=$("#gSync",P);if(s)s.onclick=()=>syncDrive(false);const w=$("#gSw",P);if(w)w.onclick=()=>{ls("gmail",null);ls("gconn",null);gdToken=null;ls("gtok",null);gdAuth(true);};
+     const s=$("#gSync",P);if(s)s.onclick=()=>syncDrive(false);const w=$("#gSw",P);if(w)w.onclick=()=>{ls("gmail",null);ls("gconn",null);gdToken=null;tokSave(null);gdAuth(true);};
      const a=$("#gA",P);if(a)a.onchange=()=>ls("autosync",a.checked?"1":"0");}};}
 
 /* ---------- Sicherung als Datei, Papierkorb, Export ---------- */
 function dataPanel(){const cut=Date.now()-30*864e5;const trash=[...S.points.filter(p=>p.del&&p.del>cut).map(p=>({k:"p",x:p})),...S.tours.filter(t=>t.del&&t.del>cut).map(t=>({k:"t",x:t}))].sort((a,b)=>b.x.del-a.x.del);
   return {title:"Daten und Sicherung",icon:`<svg><use href="#i-box"/></svg>`,html:`
    <div class="card"><h3>Sicherung</h3><p class="muted">Alle Orte, Touren (mit Original-GPX), Fotos und Einstellungen als eine Datei – unabhängig von Google.</p>
+    <label class="chk"><input type="checkbox" id="dEnc"><span>Mit Passwort verschlüsseln <small class="muted">(empfohlen – die Datei enthält deine Orte samt Zuhause)</small></span></label>
+    <div id="dPw" hidden style="margin:6px 0 8px"><input class="inp" type="password" id="dPw1" placeholder="Passwort (mind. 8 Zeichen)" autocomplete="new-password"><input class="inp" type="password" id="dPw2" placeholder="Passwort wiederholen" autocomplete="new-password" style="margin-top:6px">
+     <p class="muted small" style="margin:4px 0 0">Ohne dieses Passwort lässt sich die Sicherung nicht mehr öffnen – gut aufbewahren.</p></div>
     <div class="btns"><button class="btn pri" id="dExp"><svg><use href="#i-down"/></svg>Sicherung speichern</button><button class="btn" id="dImp"><svg><use href="#i-up"/></svg>Sicherung einlesen</button></div></div>
    <div class="card"><h3>Export</h3><div class="btns"><button class="btn" id="dGpx"><svg><use href="#i-gpx"/></svg>Alle Orte als GPX</button><button class="btn" id="dCsv"><svg><use href="#i-table"/></svg>Tabelle (Verwaltung)</button></div>
-    <p class="muted small">GPX: alle Orte in einer einzigen Gruppe «Boschor Map».</p></div>
+    <p class="muted small">GPX: alle Orte in einer einzigen Gruppe «BoschorMap».</p></div>
    <div class="card"><h3>Papierkorb (30 Tage)</h3>${trash.length?trash.map(z=>`<div class="q"><span class="grow"><b>${esc(z.x.name)}</b><br><small class="muted">${z.k==="p"?"Ort":"Tour"} · gelöscht ${fmtDT(z.x.del)}</small></span><button class="btn sm" data-r="${z.k}:${z.x.id}">Wiederherstellen</button></div>`).join(""):`<div class="muted">Leer.</div>`}</div>`,
-   after(P){$("#dExp",P).onclick=exportBackup;$("#dImp",P).onclick=()=>{const f=$("#fBackup");f.onchange=()=>{const x=f.files[0];f.value="";if(x)importBackup(x);};f.click();};
+   after(P){const en=$("#dEnc",P);en.onchange=()=>{$("#dPw",P).hidden=!en.checked;};
+     $("#dExp",P).onclick=()=>{let pw=null;if(en.checked){pw=$("#dPw1",P).value;if(pw.length<8)return toast("Passwort: mindestens 8 Zeichen");if(pw!==$("#dPw2",P).value)return toast("Die Passwörter stimmen nicht überein");}exportBackup(pw);};$("#dImp",P).onclick=()=>{const f=$("#fBackup");f.onchange=()=>{const x=f.files[0];f.value="";if(x)importBackup(x);};f.click();};
      $("#dGpx",P).onclick=()=>{const pts=S.points.filter(p=>!p.del);const x=s=>esc(s);
-       download(`BoschorMap_Orte_${today()}.gpx`,`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Boschor Map" xmlns="http://www.topografix.com/GPX/1/1">\n`+pts.map(p=>`<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">${p.hoehe!=null?`<ele>${p.hoehe}</ele>`:""}<name>${x(p.name)}</name><desc>${x(CATS[p.cat].n+(p.note?" – "+p.note:""))}</desc><type>Boschor Map</type></wpt>`).join("\n")+`\n</gpx>\n`,"application/gpx+xml");};
+       download(`BoschorMap_Orte_${today()}.gpx`,`<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="BoschorMap" xmlns="http://www.topografix.com/GPX/1/1">\n`+pts.map(p=>`<wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">${p.hoehe!=null?`<ele>${p.hoehe}</ele>`:""}<name>${x(p.name)}</name><desc>${x(CATS[p.cat].n+(p.note?" – "+p.note:""))}</desc><type>BoschorMap</type></wpt>`).join("\n")+`\n</gpx>\n`,"application/gpx+xml");};
      $("#dCsv",P).onclick=showAdmin;
      $$("[data-r]",P).forEach(b=>b.onclick=async()=>{const [k,id]=b.dataset.r.split(":");if(k==="p"){const p=S.points.find(x=>x.id===id);delete p.del;await savePoint(p);}else{const t=S.tours.find(x=>x.id===id);delete t.del;await saveTour(t);}refreshPanel();toast("Wiederhergestellt");});}};}
 const b64=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(",")[1]);f.readAsDataURL(blob);});
-async function exportBackup(){progress("Sicherung erstellen",0,0,"Daten sammeln …");try{const [lines,raws,ids]=await Promise.all([getAll("lines"),getAll("raw"),getKeys("photos")]);
+/* Verschlüsselung der Sicherung: PBKDF2 (SHA-256, 310'000 Runden) + AES-GCM 256, alles im Browser */
+const ENC_MAGIC="BMENC1";
+async function encKey(pw,salt){const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:310000,hash:"SHA-256"},k,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);}
+async function encryptBlob(blob,pw){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));const key=await encKey(pw,salt);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,await blob.arrayBuffer());return new Blob([ENC_MAGIC,salt,iv,ct],{type:"application/octet-stream"});}
+async function decryptFile(file,pw){const b=new Uint8Array(await file.arrayBuffer());const salt=b.slice(6,22),iv=b.slice(22,34);const key=await encKey(pw,salt);
+  try{return new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv},key,b.slice(34)));}catch(e){throw new Error("Passwort falsch oder Datei beschädigt");}}
+async function isEncrypted(file){return new TextDecoder().decode(new Uint8Array(await file.slice(0,6).arrayBuffer()))===ENC_MAGIC;}
+function b64Blob(b64,type){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type});}
+async function exportBackup(pw){progress("Sicherung erstellen",0,0,"Daten sammeln …");try{const [lines,raws,ids]=await Promise.all([getAll("lines"),getAll("raw"),getKeys("photos")]);
   const parts=[`{"app":"boschormap","v":1,"t":${Date.now()},"version":"${APP_VERSION}","points":`,JSON.stringify(S.points),`,"tours":`,JSON.stringify(S.tours.map(stripTour)),`,"lines":`,JSON.stringify(lines),`,"raw":`,JSON.stringify(raws),`,"settings":`,JSON.stringify(S.settings),`,"photos":[`];
   let i=0;for(const id of ids){i++;if(i%5===0)progress("Sicherung erstellen",i,ids.length,"Fotos …");const p=await getOne("photos",id);parts.push((i>1?",":"")+JSON.stringify({id:p.id,pid:p.pid,t:p.t,lat:p.lat,lon:p.lon,mod:p.mod,data:await b64(p.blob)}));}
-  parts.push("]}");download(`BoschorMap_Sicherung_${today()}.json`,new Blob(parts,{type:"application/json"}));toast("Sicherung gespeichert");}catch(e){toast("Sicherung: "+e.message,5000);}finally{progressDone();}}
-async function importBackup(file){progress("Sicherung einlesen",0,0,file.name);try{const j=JSON.parse(await file.text());if(j.app!=="boschormap")throw new Error("Keine Boschor-Map-Sicherung");
+  parts.push("]}");let blob=new Blob(parts,{type:"application/json"});
+  if(pw){progress("Sicherung verschlüsseln",0,0,"");blob=await encryptBlob(blob,pw);download(`BoschorMap_Sicherung_${today()}.bmsafe`,blob);toast("Verschlüsselte Sicherung gespeichert");}
+  else{download(`BoschorMap_Sicherung_${today()}.json`,blob);toast("Sicherung gespeichert");}}catch(e){toast("Sicherung: "+e.message,5000);}finally{progressDone();}}
+async function importBackup(file){let text;if(await isEncrypted(file)){const pw=prompt("Passwort der Sicherung:");if(!pw)return;progress("Sicherung entschlüsseln",0,0,file.name);
+    try{text=await decryptFile(file,pw);}catch(e){progressDone();return toast(e.message,5000);}}
+  progress("Sicherung einlesen",0,0,file.name);try{const j=JSON.parse(text!=null?text:await file.text());if(j.app!=="boschormap")throw new Error("Keine Boschor-Map-Sicherung");
     const replace=confirm("Alles ersetzen?\n\nOK = alle Daten auf diesem Gerät durch die Sicherung ersetzen\nAbbrechen = zusammenführen (neuere Version gewinnt)");
     if(replace){for(const st of ["points","tours","lines","raw","photos"]){const d=await db();await new Promise(r=>{const t=d.transaction(st,"readwrite");t.objectStore(st).clear();t.oncomplete=r;});}S.points=[];S.tours=[];}
     const mp=mergeArr(S.points,j.points);await putMany("points",mp.changed);S.points=mp.all;
@@ -120,7 +140,7 @@ async function importBackup(file){progress("Sicherung einlesen",0,0,file.name);t
     for(const t of mt.changed){const l=lm.get(t.id);if(l){t.disp=simplify(l.line,4).map(p=>[r5(p[0]),r5(p[1])]);t.bbox=bboxOf(l.line);await put("lines",l);}}await putMany("tours",mt.changed);S.tours=mt.all;
     for(const r of j.raw||[])if(mt.changed.some(t=>t.id===r.id))await put("raw",r);
     const have=new Set(await getKeys("photos"));let i=0;for(const p of j.photos||[]){i++;if(have.has(p.id))continue;if(i%5===0)progress("Sicherung einlesen",i,j.photos.length,"Fotos …");
-      const blob=await (await fetch("data:image/jpeg;base64,"+p.data)).blob();let thumb=null;try{thumb=await resizeImg(blob,320,0.7);}catch(e){}await put("photos",{id:p.id,pid:p.pid,t:p.t,lat:p.lat,lon:p.lon,mod:p.mod,blob,thumb});}
+      const blob=b64Blob(p.data,"image/jpeg");let thumb=null;try{thumb=await resizeImg(blob,320,0.7);}catch(e){}await put("photos",{id:p.id,pid:p.pid,t:p.t,lat:p.lat,lon:p.lon,mod:p.mod,blob,thumb});}
     if(j.settings&&(replace||(j.settings.mod||0)>(S.settings.mod||0))){S.settings=Object.assign(settingsDefault(),j.settings);await metaSet("settings",S.settings);}
     refreshMarkers();map.render();markDirty();toast(`Eingelesen: ${mp.changed.length} Orte, ${mt.changed.length} Touren`,4000);if(nav.length)refreshPanel();}
   catch(e){toast("Sicherung: "+e.message,6000);}finally{progressDone();}}

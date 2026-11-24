@@ -1,4 +1,4 @@
-/* Boschor Map – GPX lesen, Track bereinigen (Ausreisser, Pausen), Kennzahlen, persönliches Tempo */
+/* BoschorMap – GPX lesen, Track bereinigen (Ausreisser, Pausen), Kennzahlen, persönliches Tempo */
 "use strict";
 function parseGPX(text){const d=new DOMParser().parseFromString(text,"application/xml");if(d.getElementsByTagName("parsererror").length)throw new Error("Keine gültige GPX-Datei");
   const val=(el,tag)=>{const x=el.getElementsByTagName(tag)[0];return x?x.textContent.trim():"";};
@@ -77,6 +77,6 @@ function solve3(A,b){const m=A.map((r,i)=>[...r,b[i]]);for(let i=0;i<3;i++){let 
 
 /* ---------- GPX schreiben ---------- */
 function toGPX(name,line,wpts){const x=s=>esc(s);const t=line.some(p=>p[3]);
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Boschor Map" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${x(name)}</name></metadata>\n`+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="BoschorMap" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${x(name)}</name></metadata>\n`+
    (wpts||[]).map(w=>`<wpt lat="${w.lat.toFixed(6)}" lon="${w.lon.toFixed(6)}">${w.ele!=null?`<ele>${w.ele}</ele>`:""}<name>${x(w.name)}</name></wpt>\n`).join("")+
    `<trk><name>${x(name)}</name><trkseg>\n`+line.map(p=>`<trkpt lat="${p[0].toFixed(6)}" lon="${p[1].toFixed(6)}">${p[2]!=null?`<ele>${(+p[2]).toFixed(1)}</ele>`:""}${t&&p[3]?`<time>${new Date(p[3]).toISOString()}</time>`:""}</trkpt>`).join("\n")+`\n</trkseg></trk>\n</gpx>\n`;}

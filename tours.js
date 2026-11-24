@@ -1,4 +1,4 @@
-/* Boschor Map – Touren: GPX-Import, Liste, Detail mit Höhenprofil, Planung, Tempo, Ideen, Checklisten */
+/* BoschorMap – Touren: GPX-Import, Liste, Detail mit Höhenprofil, Planung, Tempo, Ideen, Checklisten */
 "use strict";
 const r5=v=>Math.round(v*1e5)/1e5;
 async function saveTour(t,line,raw){t.mod=Date.now();if(!t.created)t.created=t.mod;
@@ -12,12 +12,24 @@ function tempoFor(art){const base=S.settings.tempoLearn!==false?learnTempo(S.tou
 const estFor=t=>estTime((t.dist||0)/1000,t.up||0,t.down||0,tempoFor(t.art));
 const artOpts=sel=>Object.entries(ARTS).map(([k,a])=>`<option value="${k}"${k===sel?" selected":""}>${a.n}</option>`).join("");
 
+/* Name für eine importierte Tour: höchster Gipfel am Track (eigene Gipfel, sonst swissNAMES3D) */
+const GENERIC_NAME=/^(suunto|skitour(ing)?|ski ?tour(ing)?|backcountry|hik(e|ing)|wander|trail|walk|running|run|cycling|ride|gravel|mountain ?bik|biking|bike|move|workout|activity|track|\d{4}[-_.])/i;
+async function summitName(pts){let hi=null;for(const p of pts)if(p[2]!=null&&(!hi||p[2]>hi[2]))hi=p;if(!hi)return "";
+  let best=null,bd=200;for(const q of S.points)if(!q.del&&q.cat==="gipfel"){const d=distM(hi[0],hi[1],q.lat,q.lon);if(d<bd){bd=d;best=q.name;}}if(best)return best;
+  if(!navigator.onLine)return "";try{const [E,N]=toLV95(hi[0],hi[1]);const ext=[E-1000,N-1000,E+1000,N+1000].map(Math.round).join(",");
+    const u=`https://api3.geo.admin.ch/rest/services/api/MapServer/identify?geometryType=esriGeometryPoint&geometry=${E.toFixed(1)},${N.toFixed(1)}&imageDisplay=100,100,96&mapExtent=${ext}&tolerance=12&layers=all:ch.swisstopo.swissnames3d&sr=2056&returnGeometry=true&geometryFormat=geojson&limit=12&lang=de`;
+    const r=await fetch(u);if(!r.ok)return "";const j=await r.json();let n="",nd=1e9;for(const f of j.results||[]){const at=f.attributes||f.properties||{};if(!at.name||nameCat(at.objektart||"",at.name)!=="gipfel")continue;
+      const g=f.geometry;const c=g&&g.type==="Point"?g.coordinates:g&&g.type==="MultiPoint"?g.coordinates[0]:null;const d=c?Math.hypot(c[0]-E,c[1]-N):500;if(d<nd){nd=d;n=at.name;}}return n.split("|")[0].trim();}catch(e){return "";}}
+const GPX_MAX=40*1048576;
 /* ---------- GPX-Import (mehrere Dateien) ---------- */
 async function importGPX(files){const items=[];progress("GPX lesen",0,files.length);
-  for(let i=0;i<files.length;i++){progress("GPX lesen",i,files.length,files[i].name);try{const txt=await files[i].text();const g=parseGPX(txt);if(g.pts.length<2)throw new Error("keine Trackpunkte");
+  for(let i=0;i<files.length;i++){progress("GPX lesen",i,files.length,files[i].name);try{if(files[i].size>GPX_MAX)throw new Error(`zu gross (${fmtN(files[i].size/1048576,1)} MB, höchstens ${GPX_MAX/1048576} MB)`);const txt=await files[i].text();if(!/<gpx[\s>]/i.test(txt.slice(0,5000)))throw new Error("keine GPX-Datei");const g=parseGPX(txt);if(g.pts.length<2)throw new Error("keine Trackpunkte");
       const t0=g.pts.find(p=>p[3]);const art=guessArt(g.type+" "+g.name+" "+files[i].name)||ls("lastArt")||"wandern";
       items.push({file:files[i],txt,g,art,name:g.name&&!/^(suunto|track|move|activity)/i.test(g.name)?g.name:"",date:t0?new Date(t0[3]).toISOString().slice(0,10):today()});}
     catch(e){items.push({file:files[i],err:e.message});}}
+  /* Gipfelname vorschlagen, wenn der GPX-Name nichtssagend ist */
+  for(let i=0;i<items.length;i++){const it=items[i];if(it.err)continue;if(it.name&&!GENERIC_NAME.test(it.name))continue;progress("Gipfel erkennen",i,items.length,it.file.name);
+    const n=await summitName(it.g.pts);if(n)it.name=n;}
   progressDone();const groups=mergeGroups(items);
   openPanel(()=>({title:`GPX importieren (${items.length})`,icon:`<svg><use href="#i-gpx"/></svg>`,html:`
     <p class="muted">Pro Tour Art und Name prüfen. Pausen und GPS-Ausreisser werden automatisch bereinigt, das Original bleibt gespeichert.</p>
@@ -73,15 +85,15 @@ function toursPanel(){const all=S.tours.filter(t=>!t.del);const years=[...new Se
   const sum=L.reduce((s,t)=>{s.n++;s.km+=(t.dist||0)/1000;s.up+=t.up||0;s.mv+=t.moving||0;return s;},{n:0,km:0,up:0,mv:0});
   const byYear={};if(tf.status==="gemacht"&&!tf.year)for(const t of L){const y=String(t.date).slice(0,4);(byYear[y]=byYear[y]||{n:0,km:0,up:0}).n++;byYear[y].km+=(t.dist||0)/1000;byYear[y].up+=t.up||0;}
   return {title:"Touren",icon:`<svg><use href="#i-route"/></svg>`,html:`
-   <div class="chips"><button class="chip${tf.status==="gemacht"?" on":""}" data-s="gemacht">Gemacht</button><button class="chip${tf.status==="idee"?" on":""}" data-s="idee">Ideen</button>
+   <div class="chips"><button class="chip${tf.status==="gemacht"?" on":""}" data-s="gemacht">Gemacht</button><button class="chip${tf.status==="idee"?" on":""}" data-s="idee">Geplant</button>
     <span class="grow"></span>${tf.status==="gemacht"?`<select class="inp" id="tY" style="width:auto;min-height:34px;padding:4px 8px"><option value="">Alle Jahre</option>${years.map(y=>`<option${y===tf.year?" selected":""}>${y}</option>`).join("")}</select>`:""}</div>
    <div class="chips"><button class="chip${!tf.art?" on":""}" data-a="">Alle</button>${Object.entries(ARTS).map(([k,a])=>`<button class="chip${tf.art===k?" on":""}" data-a="${k}" style="${tf.art===k?`background:${a.c};border-color:${a.c}`:`border-color:${a.c}`}">${a.n}</button>`).join("")}</div>
-   ${tf.status==="gemacht"?`<div class="kv" style="margin-bottom:10px"><div><b>${fmtN(sum.n)}</b><small>Touren</small></div><div><b>${fmtN(sum.km)}</b><small>km</small></div><div><b>${fmtN(sum.up)}</b><small>Höhenmeter</small></div><div><b>${fmtDur(sum.mv)}</b><small>in Bewegung</small></div></div>
+   ${tf.status==="gemacht"?`<div class="kv kv4" style="margin-bottom:10px"><div><b>${fmtN(sum.n)}</b><small>Touren</small></div><div><b>${fmtN(sum.km)}</b><small>km</small></div><div><b>${fmtN(sum.up)}</b><small>Höhenmeter</small></div><div><b>${fmtDur(sum.mv)}</b><small>in Bewegung</small></div></div>
     ${Object.keys(byYear).length>1?`<div class="card"><h3>Pro Jahr</h3><table style="width:100%;font-size:14px"><tr class="muted"><td>Jahr</td><td>Touren</td><td>km</td><td>Hm</td></tr>${Object.entries(byYear).sort((a,b)=>b[0].localeCompare(a[0])).map(([y,v])=>`<tr><td><b>${y}</b></td><td>${v.n}</td><td>${fmtN(v.km)}</td><td>${fmtN(v.up)}</td></tr>`).join("")}</table></div>`:""}`:""}
-   <div class="btns" style="margin-bottom:10px"><button class="btn" id="tImp"><svg><use href="#i-gpx"/></svg>GPX importieren</button><button class="btn" id="tPlan"><svg><use href="#i-flag"/></svg>Neue Idee planen</button></div>
-   ${L.map(t=>`<button class="li" data-id="${t.id}"><span class="sw" style="background:${ARTS[t.art].c}"></span><span class="t"><b>${esc(t.name)}</b><small>${t.status==="gemacht"?fmtDate(t.date)+" · ":""}${ARTS[t.art].n} · ${fmtKm(t.dist)} · ↑${fmtN(t.up)} m · ${t.status==="gemacht"?fmtDur(t.moving):"≈ "+fmtDur(estFor(t))}</small></span>${(t.rate||{}).gesamt?starsHTML(t.rate.gesamt,"",1):""}</button>`).join("")||`<div class="empty">${tf.status==="gemacht"?"Noch keine Touren. GPX-Dateien aus der Suunto-App importieren.":"Noch keine Ideen. Unter «Planen» eine Tour zeichnen."}</div>`}`,
+
+   ${L.map(t=>`<button class="li" data-id="${t.id}"><span class="sw" style="background:${ARTS[t.art].c}"></span><span class="t"><b>${esc(t.name)}</b><small>${t.status==="gemacht"?fmtDate(t.date)+" · ":""}${ARTS[t.art].n} · ${fmtKm(t.dist)} · ↑${fmtN(t.up)} m · ${t.status==="gemacht"?fmtDur(t.moving):"≈ "+fmtDur(estFor(t))}</small></span>${(t.rate||{}).gesamt?starsHTML(t.rate.gesamt,"",1):""}</button>`).join("")||`<div class="empty">${tf.status==="gemacht"?"Noch keine Touren. GPX-Dateien aus der Suunto-App importieren.":"Noch keine Ideen. Unter «Planen» eine Tour zeichnen."}</div>`}`,foot:`<div class="fabwrap"><div class="fabm" id="tAddM" hidden><button class="btn" id="tImp"><svg><use href="#i-gpx"/></svg>GPX importieren</button><button class="btn" id="tPlan"><svg><use href="#i-flag"/></svg>Neue Tour planen</button></div><button class="fab" id="tAdd" aria-label="Tour hinzufügen"><svg><use href="#i-plus"/></svg></button></div>`,
    after(P){$$("[data-s]",P).forEach(b=>b.onclick=()=>{tf.status=b.dataset.s;refreshPanel();});$$("[data-a]",P).forEach(b=>b.onclick=()=>{tf.art=b.dataset.a;refreshPanel();});
-     const y=$("#tY",P);if(y)y.onchange=()=>{tf.year=y.value;refreshPanel();};$("#tImp",P).onclick=()=>$("#fGpx").click();$("#tPlan",P).onclick=()=>{closePanel();startPlan({});};
+     const y=$("#tY",P);if(y)y.onchange=()=>{tf.year=y.value;refreshPanel();};$("#tAdd",P).onclick=e=>{e.stopPropagation();const m=$("#tAddM",P);m.hidden=!m.hidden;};$("#tImp",P).onclick=()=>$("#fGpx").click();$("#tPlan",P).onclick=()=>{closePanel();startPlan({});};
      $$(".li[data-id]",P).forEach(b=>b.onclick=()=>showTour(b.dataset.id));}};}
 
 /* ---------- Tour anzeigen ---------- */
@@ -105,6 +117,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
    ${t.diffAuto?diffHTML(t.diffAuto).replace("Schwierigkeit (Vorschlag)",/Skirouten/.test(t.diffAuto.src||"")?"Schwierigkeit laut Skirouten":"Schwierigkeit laut Wegen"):""}
    ${prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="tProf"></canvas><div class="muted small" id="tProfI">Antippen oder darüberfahren: Stelle auf der Karte</div></div>`:""}
    ${prof.length>2?steepHTML(slopeInfo(prof,t.prof?60:100)):""}
+   ${prof.length>2?checkCard(tourCheckKey(t)):""}
    ${t.merged?`<p class="muted small">Aus ${t.merged} Tracks zusammengefasst.</p>`:""}
    ${!idea&&(t.removed||t.pauses)?`<p class="muted small">Bereinigt: ${t.pauses?t.pauses+" Pausen zusammengefasst":""}${t.removed&&t.pauses?", ":""}${t.removed?t.removed+" Ausreisser entfernt":""}.</p>`:""}
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
@@ -122,7 +135,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
     <button class="btn red" id="tDel"><svg><use href="#i-trash"/></svg>Löschen</button></div>`,
    async after(P){bindDiff(P);P.addEventListener("stars",async e=>{const k=e.target.dataset.stars;t.rate=Object.assign({},t.rate||{});t.rate[k]=e.detail;await saveTour(t);});
      if(prof.length>1){const top=prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]);const b=winter?await bulletinAt(top.lat,top.lon):null;const band=b&&b.critLow!=null?[b.critLow,b.critHigh]:null;
-       const si=slopeInfo(prof,t.prof?60:100);bindSteep(P,prof,si);drawProfile($("#tProf",P),prof,{band,slope:si,info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
+       const si=slopeInfo(prof,t.prof?60:100);bindSteep(P,prof,si);bindCheckCard(P,tourCheckKey(t),async()=>({prof,line:(await tourLine(t.id)||[]).map(p=>[p[0],p[1]]),winter:!!ARTS[t.art].ski}));drawProfile($("#tProf",P),prof,{band,slope:si,info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
      bindTourPhotoCard(P,t);
      $("#tEd",P).onclick=()=>openPanel(()=>editTourPanel(t));
      const re=$("#tRe",P);if(re)re.onclick=()=>{closePanel();startPlan({edit:t.id});};
@@ -334,18 +347,19 @@ function planPanel(){const ps=planState;if(!ps)return {title:"Planen",html:`<div
    ${ps.prof&&ps.prof.length>1?`<div class="card" style="margin-top:10px;padding:8px"><canvas class="prof" id="plProf"></canvas><div class="muted small" id="plProfI">Höhen: swissALTI3D</div></div>`:ps.wps.length>1?`<p class="muted small">${navigator.onLine?"Höhenprofil wird geladen …":"Höhenprofil nur online (swisstopo)"}</p>`:""}
    ${diffHTML(routeDifficulty(ps.segs,ps.art))}
    ${ps.prof?steepHTML(slopeInfo(ps.prof)):""}
+   ${ps.prof&&ps.wps.length>1?checkCard(planCheckKey()):""}
    <div class="card"><div class="crit"><span>Tempo ${(fac*100).toFixed(0)} %<br><small class="muted">${fmtN(t.vf,1)} km/h · ↑${fmtN(t.vu)} · ↓${fmtN(t.vd)} Hm/h</small></span><input type="range" id="plF" min="60" max="150" step="5" value="${Math.round(fac*100)}" style="flex:1;max-width:180px"></div></div>
    <div class="btns"><button class="btn" id="plG"${ps.wps.length<2?" disabled":""}><svg><use href="#i-down"/></svg>GPX</button>
     <button class="btn" id="plRev"${ps.wps.length<2?" disabled":""}>Umkehren</button><button class="btn" id="plZ"${ps.wps.length<2?" disabled":""}>Zurück zum Start</button></div>
 `,foot:`<button class="btn" id="plU2"${ps.undo.length?"":" disabled"} title="Rückgängig (Ctrl+Z)"><svg><use href="#i-undo"/></svg>Rückgängig</button><button class="btn pri" id="plS"${ps.wps.length<2?" disabled":""}><svg><use href="#i-check"/></svg>${ps.editId?"Speichern":"Als Idee speichern"}</button><button class="btn" id="plQ"><svg><use href="#i-close"/></svg>${ps.editId?"Verwerfen":"Beenden"}</button>`,onClose:planQuit,
-   after(P){if(ps.prof&&ps.prof.length>1){const si=slopeInfo(ps.prof);bindSteep(P,ps.prof,si);drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P),slope:si});}bindDiff(P);
+   after(P){if(ps.prof&&ps.prof.length>1){const si=slopeInfo(ps.prof);bindSteep(P,ps.prof,si);bindCheckCard(P,planCheckKey(),async()=>({prof:ps.prof,line:ps.segs.flatMap(L=>L?L.map(p=>[p[0],p[1]]):[]),winter:!!ARTS[ps.art].ski}));drawProfile($("#plProf",P),ps.prof,{info:$("#plProfI",P),slope:si});}bindDiff(P);
      $$("[data-art]",P).forEach(b=>b.onclick=()=>{if(b.dataset.art!==ps.art)setPlanArt(b.dataset.art);});
      $$("[data-pm]",P).forEach(b=>b.onclick=()=>{ps.mode=b.dataset.pm;refreshPanel();toast(`Neue Punkte: ${MODE_N[ps.mode]}`,1500);});
      $("#plQ",P).onclick=planQuit;
      $("#plF",P).onchange=async e=>{S.settings.tempoFactor=Object.assign({},S.settings.tempoFactor||{});S.settings.tempoFactor[ps.art]=+e.target.value/100;await saveSettings();refreshPanel();};
      $("#plRev",P).onclick=async()=>{snap();ps.wps.reverse();ps.segs=[];await planRoute();refreshPanel();};
      $("#plZ",P).onclick=async()=>{snap();const a=ps.wps[0];ps.wps.push({lat:a.lat,lon:a.lon,mode:ps.mode});await planRoute();refreshPanel();};
-     $("#plG",P).onclick=()=>{const L=planLine();download(`${fileSafe(ps.name||"Planung")}.gpx`,toGPX(ps.name||"Boschor Map Planung",L.map(p=>[p[0],p[1],p[2],null])),"application/gpx+xml");};
+     $("#plG",P).onclick=()=>{const L=planLine();download(`${fileSafe(ps.name||"Planung")}.gpx`,toGPX(ps.name||"BoschorMap Planung",L.map(p=>[p[0],p[1],p[2],null])),"application/gpx+xml");};
      $("#plS",P).onclick=savePlan;$("#plU2",P).onclick=planUndo;}};}
 async function savePlan(){const ps=planState;if(!ps||ps.wps.length<2)return;if(!ps.prof&&navigator.onLine){clearTimeout(ps.pt);toast("Höhenprofil wird geladen …");await planProfile();if(planState!==ps)return;}const def=ps.name||planName();const name=prompt("Name der Tour-Idee",def);if(name===null)return;
   const L=planLine();let line=L.map(p=>[p[0],p[1],p[2]!=null?p[2]:null,null]);
@@ -399,7 +413,7 @@ function weekendPanel(){if(!wf)wf=lsJ("wf",{arts:[],maxH:0,maxKm:0,from:"home",d
   L=L.map(t=>({t,km:distM(o.lat,o.lon,t.disp[0][0],t.disp[0][1])/1000,h:estFor(t)/3600})).filter(x=>(!wf.maxH||x.h<=wf.maxH)&&(!wf.maxKm||x.km<=wf.maxKm));
   L.sort((a,b)=>(((b.t.rate||{}).gesamt||0)-((a.t.rate||{}).gesamt||0))||a.km-b.km);
   const sat=nextWeekend();
-  return {title:"Ideen",icon:`<svg><use href="#i-idea"/></svg>`,html:`
+  return {title:"Vorschläge",icon:`<svg><use href="#i-idea"/></svg>`,html:`<p class="muted small" style="margin:0 0 8px">Deine geplanten Touren, die jetzt passen – nach Art, Dauer und Anfahrt, mit Wetter und Bulletin.</p>
    <div class="chips">${Object.entries(ARTS).map(([k,a])=>`<button class="chip${wf.arts.includes(k)?" on":""}" data-a="${k}">${a.n}</button>`).join("")}</div>
    <div class="row" style="margin-bottom:8px"><select class="inp" id="wH" style="flex:1"><option value="0">Dauer beliebig</option>${[2,3,4,5,6,8,10].map(h=>`<option value="${h}"${wf.maxH===h?" selected":""}>bis ${h} h</option>`).join("")}</select>
     <select class="inp" id="wK" style="flex:1"><option value="0">Entfernung beliebig</option>${[20,40,60,90,120,160].map(k=>`<option value="${k}"${wf.maxKm===k?" selected":""}>bis ${k} km</option>`).join("")}</select></div>
@@ -533,7 +547,7 @@ function combineClean(cl){cl=cl.slice().sort((a,b)=>(a.stats.t0||0)-(b.stats.t0|
   const a=minT(pts),b=maxT(pts);st.t0=a;st.total=a&&b?Math.round((b-a)/1000):null;
   return {pts,stats:st,removed,pauses:{length:pauses+cl.length-1},gaps:cl.length-1};}
 function mergeGpxText(txts,name){const trk=[];for(const t of txts){const m=t.match(/<trk[\s>][\s\S]*?<\/trk>/g);if(m)trk.push(...m);}
-  if(!trk.length)return txts[0];return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Boschor Map" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${esc(name||"")}</name></metadata>\n${trk.join("\n")}\n</gpx>\n`;}
+  if(!trk.length)return txts[0];return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="BoschorMap" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${esc(name||"")}</name></metadata>\n${trk.join("\n")}\n</gpx>\n`;}
 /* Beim Import: Tracks desselben Tags mit Unterbruch unter 6 h als Gruppe vorschlagen */
 function mergeGroups(items){const v=items.map((it,i)=>({it,i})).filter(x=>!x.it.err&&minT(x.it.g.pts)).sort((a,b)=>minT(a.it.g.pts)-minT(b.it.g.pts));const groups=[];let cur=null;
   for(const x of v){const s=minT(x.it.g.pts);if(cur&&cur.date===x.it.date&&s-cur.end<MERGE_GAP&&s-cur.end>-60000){cur.idx.push(x.i);cur.gaps.push(Math.max(0,s-cur.end));cur.end=Math.max(cur.end,maxT(x.it.g.pts));}
@@ -564,3 +578,7 @@ function mergePanel(t){const cand=S.tours.filter(x=>!x.del&&x.id!==t.id&&x.statu
      <button class="btn pri full" id="mGo"><svg><use href="#i-check"/></svg>Zusammenführen</button>`:`<div class="note">Keine anderen gemachten Touren vom gleichen oder vom Nachbartag.</div>`}`,
    after(P){const g=$("#mGo",P);if(g)g.onclick=async()=>{const ids=[t.id,...$$("[data-mt]",P).filter(c=>c.checked).map(c=>c.dataset.mt)];if(ids.length<2)return toast("Mindestens eine weitere Tour wählen");
      try{const nt=await mergeTours(ids);closePanel();if(nt){toast(`${ids.length} Touren zusammengeführt`);showTour(nt.id);}}catch(e){toast(e.message,5000);}};}};}
+
+/* Schlüssel für den Routen-Check: ändert sich, sobald die Route sich ändert */
+function tourCheckKey(t){return `t:${t.id}:${t.mod||t.created||0}:${t.art}`;}
+function planCheckKey(){const ps=planState;return ps?`p:${ps.art}:`+ps.wps.map(w=>w.lat.toFixed(5)+","+w.lon.toFixed(5)+w.mode).join("|"):"";}

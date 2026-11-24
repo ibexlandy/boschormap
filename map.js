@@ -1,4 +1,4 @@
-/* Boschor Map – eigene, schlanke Kartenanzeige (Web Mercator, 256-px-Kacheln).
+/* BoschorMap – eigene, schlanke Kartenanzeige (Web Mercator, 256-px-Kacheln).
    Kacheln als <img>, Linien auf einem Canvas, Punkte als DOM-Elemente.
    Bedienung: ziehen, zwei Finger (Pinch), Mausrad, Doppelklick, langes Drücken. */
 "use strict";

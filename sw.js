@@ -1,7 +1,7 @@
-/* Boschor Map – Service-Worker (Scope /boschormap/). Eigene Cache-Namen «boschormap-…»;
+/* BoschorMap – Service-Worker (Scope /boschormap/). Eigene Cache-Namen «boschormap-…»;
    es werden ausschliesslich eigene Caches gelöscht, nie die von IbexMap auf derselben Herkunft. */
-const V="1.13",APP="boschormap-app-v"+V,VIEW="boschormap-view",SHARE="boschormap-share",MAXVIEW=4000;
-const SHELL=["./","index.html","app.css","core.js","map.js","gpx.js","app.js","tours.js","offline.js","sync.js","admin.js",
+const V="2.0",APP="boschormap-app-v"+V,VIEW="boschormap-view",SHARE="boschormap-share",MAXVIEW=4000;
+const SHELL=["./","index.html","app.css","core.js","map.js","gpx.js","app.js","tours.js","offline.js","sync.js","admin.js","check.js","wxhour.js","boot.js",
   "manifest.webmanifest","icon-192.png","icon-512.png","icon-maskable-512.png","favicon.png","apple-touch-icon.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(APP).then(c=>Promise.all(SHELL.map(u=>fetch(u,{cache:"no-store"}).then(r=>{if(r.ok)return c.put(new URL(u,self.registration.scope).href,r);}).catch(()=>{})))).then(()=>self.skipWaiting()));});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n.startsWith("boschormap-")&&n!==APP&&n!==VIEW&&n!==SHARE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()));});
@@ -17,7 +17,7 @@ async function tile(req,u){const m=u.pathname.match(/^\/1\.0\.0\/([^/]+)\/defaul
   const c=await caches.open(VIEW);const hit=await c.match(req.url);if(hit)return hit;
   try{const r=await fetch(req.url,{mode:"cors",credentials:"omit"});if(r.ok){c.put(req.url,r.clone());trim();}return r;}catch(e){return Response.error();}}
 const appHit=async u=>{try{return await (await caches.open(APP)).match(u);}catch(e){return undefined;}};
-/* «Teilen an Boschor Map» (Android): Dateien zwischenspeichern, dann die App öffnen */
+/* «Teilen an BoschorMap» (Android): Dateien zwischenspeichern, dann die App öffnen */
 async function shareIn(req){try{const fd=await req.formData();const c=await caches.open(SHARE);let n=0;
     const all=[];for(const [k,v] of fd.entries())if(v&&typeof v!=="string")all.push(v);
     for(const f of all){if(!f.size)continue;n++;

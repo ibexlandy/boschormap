@@ -1,6 +1,6 @@
-/* Boschor Map – Oberfläche: Karte, Orte, Panels, Suche, Menü */
+/* BoschorMap – Oberfläche: Karte, Orte, Panels, Suche, Menü */
 "use strict";
-const S={points:[],tours:[],settings:{},photos:new Map()};
+const S={points:[],tours:[],settings:{},photos:new Map(),heat:!!localStorage.getItem("bm_heat")};
 let map=null,baseLayer=null,ovLayers={},meMk=null,watchId=null,selTour=null,selPoint=null,tempMk=null;
 const markers=new Map();
 
@@ -23,7 +23,7 @@ function openPanel(fn,o){nav.push({fn,o:o||{}});renderPanel();const sh=$("#sheet
   try{if(!(history.state&&history.state.bm))history.pushState({bm:1},"");}catch(e){}}
 function replacePanel(fn,o){if(!nav.length)return openPanel(fn,o);nav[nav.length-1]={fn,o:o||{}};renderPanel();}
 function panelBack(){nav.pop();if(!nav.length)return closePanel();renderPanel();}
-function closePanel(fromPop){nav.length=0;clearTemp();if(S._steep){S._steep=null;map.render();}const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
+function closePanel(fromPop){nav.length=0;clearTemp();if(S._steep||S._chk){S._steep=null;S._chk=null;map.render();}const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
   $$("#bar button").forEach(b=>b.classList.remove("on"));
   if(selTour&&!planState){selTour=null;map.render();removeProfDot();}if(selPoint){selPoint=null;refreshMarkers();}}
 window.addEventListener("popstate",()=>{if($(".pbig")){closeGallery();try{history.pushState({bm:1},"");}catch(e){}return;}
@@ -59,7 +59,7 @@ const pointDone=p=>p.cat==="gipfel"&&(p.visits||[]).length>0;
 function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:[45.5,5.6,48.1,10.9]});
   const lv=lsJ("lastview",null);if(lv&&isFinite(lv.lat))map.setView(lv.lat,lv.lon,lv.z);else map.setView(46.75,8.2,8);
   setBase(v.base||"lk");for(const k in OVERLAYS)if(v.ov&&v.ov[k])setOverlay(k,true);
-  map.addDrawer(drawTours);map.addDrawer(drawMisc);map.addDrawer(drawSteep);
+  map.addDrawer(drawTours);map.addDrawer(drawMisc);map.addDrawer(drawSteep);map.addDrawer(drawCheck);map.addDrawer(drawHeat);
   map.on("moveend",()=>{const c=map.getCenter();ls("lastview",JSON.stringify({lat:+c.lat.toFixed(5),lon:+c.lon.toFixed(5),z:Math.round(map.z*4)/4}));});
   map.on("move",()=>{$("#map").classList.toggle("zl",map.z>=13);});
   map.on("click",onMapClick);map.on("markerclick",onMarkerClick);map.on("longpress",onLongPress);
@@ -139,7 +139,7 @@ function setTemp(lat,lon){clearTemp();tempMk=map.addMarker({lat,lon,cls:"tmp",an
 function clearTemp(){if(tempMk){map.removeMarker(tempMk);tempMk=null;}}
 
 /* ---------- Punkte auf der Karte ---------- */
-function markerHTML(p){const k=CATS[p.cat]||CATS.ort;const st=p.cat==="gipfel"?(pointDone(p)?" done":" open"):"";
+function markerHTML(p){const k=CATS[p.cat]||CATS.ort;const st=(p.visits||[]).length?" done":p.cat==="gipfel"?" open":"";
   return `<div class="mk ${p.cat}${st}${selPoint===p.id?" sel":""}" style="background:${catBg(k)};--c:${k.c}">${catSvg(p.cat)}</div>${p.name||p.hoehe?`<div class="mkl" style="--c:${k.c}">${esc(p.name||"")}${p.hoehe?`<b>${fmtN(p.hoehe)}</b>`:""}</div>`:""}`;}
 function refreshMarkers(){const v=viewPrefs();for(const m of markers.values())map.removeMarker(m);markers.clear();if(v.showPts===false)return;
   for(const p of S.points){if(p.del)continue;const m=map.addMarker({lat:p.lat,lon:p.lon,anchor:[15,15],html:markerHTML(p),z:p.cat==="gipfel"?3:2});m.pid=p.id;markers.set(p.id,m);}}
@@ -302,13 +302,19 @@ function searchPanel(){return {title:"Suchen",icon:`<svg><use href="#i-search"/>
 /* ---------- Menü ---------- */
 function morePanel(){const it=(id,ic,t,s)=>`<button class="li" data-m="${id}"><span class="ic" style="background:var(--nacht)"><svg><use href="#${ic}"/></svg></span><span class="t"><b>${t}</b><small>${s}</small></span></button>`;
   return {title:"Mehr",icon:`<svg><use href="#i-more"/></svg>`,html:`
+   <h4 class="mgrp">Hinzufügen</h4>
    ${it("gpx","i-gpx","GPX importieren","Touren aus der Suunto-App, auch mehrere auf einmal")}
-   ${it("photos","i-cam","Fotos importieren","Fotos mit Aufnahmeort als Orte erfassen")}
-   ${it("tcam","i-cam","Foto unterwegs","Für die laufende Tour – kommt beim GPX-Import auf die Route")}
+   ${it("photos","i-cam","Fotos als Orte","Fotos mit Aufnahmeort als Orte erfassen")}
+   ${it("tcam","i-camgo","Foto unterwegs","Für die laufende Tour – kommt beim GPX-Import auf die Route")}
+   <h4 class="mgrp">Unterwegs</h4>
    ${it("regions","i-down","Offline-Regionen","Karten für unterwegs ohne Netz speichern")}
    ${it("cond","i-snow","Lawinenbulletin & Wetter","Für unterwegs speichern (SLF, MeteoSchweiz)")}
-   ${it("tempo","i-gauge","Persönliches Tempo","Aus deinen Touren gelernt, pro Sportart")}
    ${it("check","i-check","Checklisten","Pro Sportart, zum Abhaken")}
+   <h4 class="mgrp">Rückblick</h4>
+   ${it("book","i-book","Gipfelbuch","Alle bestiegenen Gipfel, Jahre, Höhenmeter")}
+   ${it("heat","i-heat",S.heat?"Heatmap ausblenden":"Heatmap zeigen","Wo du überall unterwegs warst")}
+   ${it("tempo","i-gauge","Persönliches Tempo","Aus deinen Touren gelernt, pro Sportart")}
+   <h4 class="mgrp">Daten & Einstellungen</h4>
    ${it("admin","i-table","Verwaltung (Tabelle)","Alle Orte und Touren bearbeiten, am PC")}
    ${it("drive","i-sync","Google Drive","Abgleich zwischen PC, Handys und Tablet")}
    ${it("data","i-box","Daten und Sicherung","Sicherung als Datei, Papierkorb, Export")}
@@ -316,6 +322,7 @@ function morePanel(){const it=(id,ic,t,s)=>`<button class="li" data-m="${id}"><s
    ${it("info","i-info","Quellen und Hinweise","swisstopo, SLF, MeteoSchweiz, BRouter")}`,
    after(P){$$("[data-m]",P).forEach(b=>b.onclick=()=>{const m=b.dataset.m;
      if(m==="gpx")$("#fGpx").click();else if(m==="photos")openPanel(photoImportStart);else if(m==="tcam")tripCam();else if(m==="regions")openPanel(regionsPanel);else if(m==="cond")openPanel(condCenterPanel);
+     else if(m==="book")openPanel(gipfelbuchPanel);else if(m==="heat"){S.heat=!S.heat;ls("heat",S.heat?"1":"");closePanel();map.render();toast(S.heat?"Heatmap: alle gemachten Touren":"Heatmap aus");}
      else if(m==="tempo")openPanel(tempoPanel);else if(m==="check")openPanel(()=>checklistPanel());else if(m==="admin")showAdmin();else if(m==="drive")openPanel(drivePanel);
      else if(m==="data")openPanel(dataPanel);else if(m==="settings")openPanel(settingsPanel);else if(m==="info")openPanel(infoPanel);});}};}
 function infoPanel(){return {title:"Quellen und Hinweise",html:`<div class="card"><p><b>Karten:</b> © swisstopo (Landeskarte, Winterkarte, SWISSIMAGE, Hangneigung, Skitouren- und Wanderwege), © BAFU (Wildruhezonen, Jagdbanngebiete), © ASTRA / SchweizMobil (Velo- und Mountainbike-Routen) – über geo.admin.ch.</p>
@@ -326,7 +333,7 @@ function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",h
   <div class="card"><h3>Zuhause</h3><p class="muted">Für «Ideen»: Entfernung der Tourideen ab zu Hause.</p><div class="muted">${h?`${esc(h.name||"gesetzt")} (${h.lat.toFixed(4)}, ${h.lon.toFixed(4)})`:"noch nicht gesetzt"}</div>
    <div class="btns" style="margin-top:8px"><button class="btn" id="sHomeMap">Kartenmitte als Zuhause</button>${S.me?`<button class="btn" id="sHomeMe">Standort als Zuhause</button>`:""}</div></div>
   <div class="card"><h3>Speicher</h3><div id="sStor" class="muted">wird berechnet …</div><div class="btns" style="margin-top:8px"><button class="btn" id="sPersist">Dauerhaft speichern anfragen</button></div></div>
-  <div class="card"><h3>App-Version</h3><p>Boschor Map v${APP_VERSION}</p><button class="btn" id="sUpd"><svg><use href="#i-sync"/></svg>Nach Update suchen</button></div>`,
+  <div class="card"><h3>App-Version</h3><p>BoschorMap v${APP_VERSION}</p><button class="btn" id="sUpd"><svg><use href="#i-sync"/></svg>Nach Update suchen</button></div>`,
   async after(P){$("#sHomeMap",P).onclick=async()=>{const c=map.getCenter();S.settings.home={lat:c.lat,lon:c.lon,name:"Kartenmitte"};await saveSettings();refreshPanel();};
     const hm=$("#sHomeMe",P);if(hm)hm.onclick=async()=>{S.settings.home={lat:S.me.lat,lon:S.me.lon,name:"Standort"};await saveSettings();refreshPanel();};
     $("#sPersist",P).onclick=async()=>{const ok=navigator.storage&&navigator.storage.persist?await navigator.storage.persist():false;toast(ok?"Speicher wird dauerhaft behalten":"Der Browser hat abgelehnt – bei installierter App meist automatisch");refreshPanel();};
@@ -355,14 +362,27 @@ async function bootApp(){if(gdPopupReturn())return;
   $$("#bar button").forEach(b=>b.onclick=()=>{const g=b.dataset.go;if(planState&&g!=="plan")return toast("Zuerst die Planung beenden oder speichern");
     closePanel();$$("#bar button").forEach(x=>x.classList.toggle("on",x===b));
     if(g==="points")openPanel(pointsPanel);else if(g==="tours")openPanel(toursPanel);else if(g==="plan")planEntry();else if(g==="weekend")openPanel(weekendPanel);else if(g==="more")openPanel(morePanel);});
-  $("#bMenu").onclick=()=>{closePanel();openPanel(morePanel);};$("#bSearch").onclick=()=>{closePanel();openPanel(searchPanel);};
+  $("#bSearch").onclick=()=>{closePanel();openPanel(searchPanel);};
   $("#fGpx").onchange=e=>{const fl=[...e.target.files];e.target.value="";if(fl.length)importGPX(fl);};
+  const shared=/[?&]share=/.test(location.search);
   bootOffline();gdBoot();swInit();handleShared();
+  if(!shared&&!ls("intro")&&!S.points.length&&!S.tours.length)setTimeout(()=>{if(!nav.length)openPanel(introPanel);},500);
   if("launchQueue" in window)try{launchQueue.setConsumer(async p=>{if(!p.files||!p.files.length)return;const fs=await Promise.all(p.files.map(h=>h.getFile()));routeIncoming(fs);});}catch(e){}
   if(location.search.includes("admin"))showAdmin();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>{if(!p)navigator.storage.persist();});}catch(e){}}
 
 /* ---------- Geteilte oder geöffnete Dateien: GPX → Touren-Import, Fotos → Foto-Import ---------- */
+/* Einstieg beim ersten Start */
+function introPanel(){const it=(id,ic,t,d)=>`<button class="li" data-in="${id}"><span class="ic" style="background:var(--nacht)"><svg><use href="#${ic}"/></svg></span><span class="t"><b>${t}</b><small>${d}</small></span></button>`;
+  return {title:"Willkommen",icon:`<svg><use href="#i-flag"/></svg>`,html:`<p class="muted" style="margin-top:0">Deine Touren, Gipfel und Ideen in der Schweiz – auf der Landeskarte, auch ohne Netz. So fängst du an:</p>
+   <div class="intro">${it("gpx","i-gpx","Tour aus Suunto importieren","In der Suunto-App «GPX exportieren» und an BoschorMap teilen – oder hier eine GPX-Datei wählen")}
+   ${it("pin","i-pin","Gipfel oder Hütte setzen","Roter Knopf rechts, oder lange auf die Karte drücken – der Name wird erkannt")}
+   ${it("plan","i-flag","Tour planen","Art wählen, Punkte antippen – die Linie folgt Wegen bzw. Skirouten")}
+   ${it("off","i-down","Region offline speichern","Karten fürs Gebiet deiner nächsten Tour aufs Gerät laden")}</div>
+   <button class="btn pri full" id="inGo" style="margin-top:12px">Los geht's</button>`,
+   onClose:()=>{ls("intro","1");closePanel();},
+   after(P){$("#inGo",P).onclick=()=>{ls("intro","1");closePanel();};
+     $$("[data-in]",P).forEach(b=>b.onclick=()=>{ls("intro","1");const k=b.dataset.in;closePanel();if(k==="gpx")$("#fGpx").click();else if(k==="pin")startPlace();else if(k==="plan")startPlan({});else if(k==="off")startRegionSelect();});}};}
 async function handleShared(){if(!/[?&]share=/.test(location.search))return;history.replaceState(null,"",location.pathname);
   let files=[];try{const c=await caches.open("boschormap-share");for(const k of await c.keys()){const r=await c.match(k);const b=await r.blob();
       files.push(new File([b],decodeURIComponent(r.headers.get("x-name")||"datei"),{type:b.type,lastModified:+r.headers.get("x-mod")||Date.now()}));await c.delete(k);}}catch(e){}
@@ -371,12 +391,14 @@ async function handleShared(){if(!/[?&]share=/.test(location.search))return;hist
   const t=txt?(await txt.text()).trim():"";const link=(t.match(/https?:\/\/\S+/)||[])[0];
   /* Kommt nur ein Link: direkt versuchen (klappt nur, wenn der Server es erlaubt), sonst anzeigen */
   /* Suunto teilt «GPX-Workout exp.» als Link auf api.sports-tracker.com – die Datei direkt dort holen */
-  if(link){if(!navigator.onLine){toast("Suunto-Link empfangen – zum Laden braucht es Internet",5000);}
+  /* Sicherheit: nur Links von Suunto/Sports-Tracker (https) selbst laden – alles andere nur anzeigen */
+  let trusted=false;try{const u=new URL(link);trusted=u.protocol==="https:"&&u.hostname==="api.sports-tracker.com";}catch(e){}
+  if(link&&trusted){if(!navigator.onLine){toast("Suunto-Link empfangen – zum Laden braucht es Internet",5000);}
     else{progress("Workout laden",0,0,/sports-tracker|suunto/.test(link)?"von Suunto …":"vom Link …");
       try{const r=await fetch(link);if(r.ok){const b=await r.blob();if(/<gpx[\s>]/i.test(await b.slice(0,4000).text())){const cd=r.headers.get("content-disposition")||"";
           const nm=decodeURIComponent((cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)/i)||[])[1]||"")||`Suunto_${today()}.gpx`;progressDone();return routeIncoming([new File([b],/\.gpx$/i.test(nm)?nm:nm+".gpx",{type:"application/gpx+xml"})]);}}}catch(e){}
       progressDone();}}
-  openPanel(()=>({title:"Geteilt – keine Datei",icon:`<svg><use href="#i-info"/></svg>`,html:`<div class="note">Boschor Map hat ${t?"nur Text bzw. einen Link":"nichts"} erhalten, keine GPX-Datei.</div>
+  openPanel(()=>({title:"Geteilt – keine Datei",icon:`<svg><use href="#i-info"/></svg>`,html:`<div class="note">BoschorMap hat ${t?"nur Text bzw. einen Link":"nichts"} erhalten, keine GPX-Datei.</div>
     ${t?`<div class="card"><h3>Empfangen</h3><p class="small" style="word-break:break-all;white-space:pre-wrap">${esc(t)}</p>${link?`<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Link öffnen</a>`:""}</div>`:""}
     <div class="card"><h3>So klappt es sicher</h3><p class="small">In der Suunto-App «GPX-Workout exp.» › <b>Speichern</b> (Ordner Download) wählen, dann hier <b>Mehr › GPX importieren</b>.</p>
     <button class="btn pri" id="shImp"><svg><use href="#i-gpx"/></svg>GPX importieren</button></div>`,after(P){$("#shImp",P).onclick=()=>$("#fGpx").click();}}));}
@@ -393,4 +415,26 @@ function swInit(){if(!("serviceWorker" in navigator))return;navigator.serviceWor
   navigator.serviceWorker.addEventListener("controllerchange",()=>{if(reloading||!ls("swseen")){ls("swseen","1");return;}reloading=true;toast("Neue Version – wird geladen …");setTimeout(()=>location.reload(),600);});
   if(navigator.serviceWorker.controller)ls("swseen","1");}
 async function checkUpdate(){if(!swReg)return toast("Update nicht möglich (kein Service-Worker)");if(!navigator.onLine)return toast("Kein Internet");toast("Suche Update …");
-  try{await swReg.update();setTimeout(()=>{if(!reloading)toast("Boschor Map ist aktuell (v"+APP_VERSION+")");},2500);}catch(e){toast("Update-Prüfung fehlgeschlagen");}}
+  try{await swReg.update();setTimeout(()=>{if(!reloading)toast("BoschorMap ist aktuell (v"+APP_VERSION+")");},2500);}catch(e){toast("Update-Prüfung fehlgeschlagen");}}
+
+/* ---------- Heatmap: alle gemachten Touren übereinander, häufig begangene Wege leuchten stärker ---------- */
+function drawHeat(c,m){if(!S.heat)return;const b=m.getBounds();const z=m.zoom;c.save();c.globalCompositeOperation="multiply";c.lineCap="round";c.lineJoin="round";
+  const w=z<9?3:z<12?5:7;c.lineWidth=w;c.strokeStyle="rgba(214,40,40,.28)";
+  for(const t of S.tours){if(t.del||t.status!=="gemacht"||!t.disp||!t.bbox)continue;const bb=t.bbox;if(bb[0]>b[2]||bb[2]<b[0]||bb[1]>b[3]||bb[3]<b[1])continue;
+    const L=t.disp,step=z<10?4:z<12?2:1;c.beginPath();for(let i=0;i<L.length;i+=step){const p=m.project(L[i][0],L[i][1]);i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y);}c.stroke();}
+  c.restore();}
+
+/* ---------- Gipfelbuch: bestiegene Gipfel mit Datum, Höhe, Jahren ---------- */
+function gipfelbuchPanel(){const g=S.points.filter(p=>!p.del&&p.cat==="gipfel"&&(p.visits||[]).length);
+  const rows=g.map(p=>{const v=(p.visits||[]).map(x=>x.d).filter(Boolean).sort();return {p,first:v[0]||"",last:v[v.length-1]||"",n:v.length};}).sort((a,b)=>b.last.localeCompare(a.last));
+  const years={};for(const r of rows)for(const v of r.p.visits||[]){const y=String(v.d||"").slice(0,4);if(!y)continue;(years[y]=years[y]||new Set()).add(r.p.id);}
+  const hm={};for(const t of S.tours)if(!t.del&&t.status==="gemacht"&&t.date){const y=t.date.slice(0,4);hm[y]=(hm[y]||0)+(t.up||0);}
+  const ys=[...new Set([...Object.keys(years),...Object.keys(hm)])].sort().reverse();const top=g.slice().sort((a,b)=>(b.hoehe||0)-(a.hoehe||0))[0];
+  const offen=S.points.filter(p=>!p.del&&p.cat==="gipfel"&&!(p.visits||[]).length).length;
+  return {title:"Gipfelbuch",icon:`<svg><use href="#i-book"/></svg>`,html:`
+   <div class="kv kv4"><div><b>${g.length}</b><small>Gipfel</small></div><div><b>${rows.reduce((a,r)=>a+r.n,0)}</b><small>Besteigungen</small></div><div><b>${top&&top.hoehe?fmtN(top.hoehe):"–"}</b><small>höchster (m)</small></div><div><b>${offen}</b><small>noch offen</small></div></div>
+   ${ys.length?`<div class="card" style="margin-top:10px"><h3>Pro Jahr</h3><table class="tbl"><tr><th>Jahr</th><th>Gipfel</th><th>Höhenmeter</th></tr>${ys.map(y=>`<tr><td><b>${y}</b></td><td>${years[y]?years[y].size:0}</td><td>${fmtN(Math.round(hm[y]||0))}</td></tr>`).join("")}</table></div>`:""}
+   <div class="card"><h3>Bestiegene Gipfel</h3>${rows.length?rows.map(r=>`<button class="q gb" data-gb="${r.p.id}"><span class="grow"><b>${esc(r.p.name||"Gipfel")}</b>${r.p.hoehe?` <small class="muted">${fmtN(r.p.hoehe)} m</small>`:""}<br>
+      <small class="muted">${r.n>1?`${r.n}× · zuerst ${fmtDate(r.first)} · zuletzt ${fmtDate(r.last)}`:fmtDate(r.last)}</small></span><svg class="chev"><use href="#i-back"/></svg></button>`).join("")
+      :`<div class="muted">Noch keine Gipfel als besucht markiert. Beim GPX-Import schlägt die App Gipfel am Track vor; oder bei einem Gipfel «Besuch hinzufügen».</div>`}</div>`,
+   after(P){$$("[data-gb]",P).forEach(b=>b.onclick=()=>showPoint(b.dataset.gb));}};}
