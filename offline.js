@@ -154,7 +154,7 @@ function bulletinHTML(b,h){if(!b)return `<div class="card"><h3><svg><use href="#
 function bindBulletin(){}
 
 /* ---------- Wetter: Lokalprognosen MeteoSchweiz (Tageswerte, ganze Schweiz, offline gespeichert) ---------- */
-let wxMem=null;const STAC="https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-local-forecasting";
+const WX_DAYS=4;let wxMem=null;const STAC="https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-local-forecasting";
 async function fetchText1252(u){const r=await fetch(u,{cache:"no-store"});if(!r.ok)throw new Error("MeteoSchweiz: Fehler "+r.status);const b=await r.arrayBuffer();
   try{return new TextDecoder("utf-8",{fatal:true}).decode(b);}catch(e){return new TextDecoder("windows-1252").decode(b);}}
 async function fetchWeather(onStep){const its=await (await fetch(STAC+"/items?limit=100",{cache:"no-store"})).json();
@@ -182,7 +182,7 @@ async function weatherAt(lat,lon,h){if(!wxMem)wxMem=await metaGet("wx",null);con
   const hasS=j=>wxMem.v.sy&&wxMem.v.sy[j]&&wxMem.v.sy[j].some(v=>v!=null);
   const cs=meta.p.map((p,j)=>({j,p,d:distM(lat,lon,p[3],p[4])/1000})).filter(x=>x.d<10&&hasS(x.j)).sort((a,b)=>a.d-b.d).slice(0,10);
   const sb=cs.length?(h?cs.reduce((m,x)=>(x.d+Math.abs(x.p[2]-h)/150<m.d+Math.abs(m.p[2]-h)/150?x:m),cs[0]):cs[0]):null;const si=sb?sb.j:i;
-  return {lat,lon,pid:sb?sb.p[0]:best.p[0],name:best.p[1],h:best.p[2],dist:best.d,sname:sb?sb.p[1]:best.p[1],sh:sb?sb.p[2]:best.p[2],t:wxMem.t,run:wxMem.run,days:wxMem.dates.map((d,k)=>({date:d,tx:wxMem.v.tx[i][k],tn:wxMem.v.tn[i][k],rr:wxMem.v.rr[i][k],q10:wxMem.v.q10&&wxMem.v.q10[i]?wxMem.v.q10[i][k]:null,q90:wxMem.v.q90&&wxMem.v.q90[i]?wxMem.v.q90[i][k]:null,sy:wxMem.v.sy&&wxMem.v.sy[si]?wxMem.v.sy[si][k]:null})).filter(x=>x.date>=td&&x.tx!=null)};}
+  return {lat,lon,pid:sb?sb.p[0]:best.p[0],name:best.p[1],h:best.p[2],dist:best.d,sname:sb?sb.p[1]:best.p[1],sh:sb?sb.p[2]:best.p[2],t:wxMem.t,run:wxMem.run,days:wxMem.dates.map((d,k)=>({date:d,tx:wxMem.v.tx[i][k],tn:wxMem.v.tn[i][k],rr:wxMem.v.rr[i][k],q10:wxMem.v.q10&&wxMem.v.q10[i]?wxMem.v.q10[i][k]:null,q90:wxMem.v.q90&&wxMem.v.q90[i]?wxMem.v.q90[i][k]:null,sy:wxMem.v.sy&&wxMem.v.sy[si]?wxMem.v.sy[si][k]:null})).filter(x=>x.date>=td&&x.tx!=null).slice(0,WX_DAYS)};}
 let wxMetaMem=null;async function getWxMeta(){if(!wxMetaMem)wxMetaMem=await metaGet("wxmeta",null);return wxMetaMem;}
 const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
 /* Wettersymbole von MeteoSchweiz: Nummer → Text (offizielle Liste); gezeichnet mit eigenen Symbolen */
@@ -220,7 +220,7 @@ function weatherHTML(w){if(!w)return `<div class="card"><h3><svg><use href="#i-s
      return `<div title="${esc(wxText(d.sy))}"${tap?` class="wxtap" data-wxd="${w.pid}|${d.date}|${w.lat}|${w.lon}" data-wxn="${esc(w.sname||w.name)}" role="button"`:""}><b>${WD[dt.getDay()]} ${dt.getDate()}.${dt.getMonth()+1}.</b>${ic}<div>${fmtN(d.tn)}° / <b style="display:inline">${fmtN(d.tx)}°</b></div>
      <div class="muted">${fmtN(d.rr,1)} mm${d.q90!=null&&d.q90-(d.q10||0)>=0.5?`<br><small>${fmtN(d.q10||0,d.q10<10?1:0)}–${fmtN(d.q90,d.q90<10?1:0)}</small>`:""}</div>
      <div class="rtrack" title="0–${M} mm">${d.q90!=null?`<i class="rq" style="left:${pc(d.q10||0)}%;width:${Math.max(1.5,pc(d.q90)-pc(d.q10||0))}%"></i>`:""}<i class="rm" style="left:${pc(d.rr||0)}%"></i></div>${d.sy?`<div class="wxt">${esc(wxText(d.sy))}</div>`:""}</div>`;}).join("")}</div>
-   <p class="muted small"><span class="rleg"><i class="rq"></i></span> Niederschlag pro Tag, Skala 0–${M} mm. Tippen auf einen der nächsten 5 Tage zeigt den Tagesverlauf. Strich = erwarteter Wert${hasQ?", heller Balken = Bandbreite: in 8 von 10 Fällen fällt so viel":""}.<br>Quelle: MeteoSchweiz (Tageswerte, Symbol für den Tag).</p></div>`;}
+   <p class="muted small"><span class="rleg"><i class="rq"></i></span> Niederschlag pro Tag, Skala 0–${M} mm. Tippen auf einen Tag zeigt den Tagesverlauf. Strich = erwarteter Wert${hasQ?", heller Balken = Bandbreite: in 8 von 10 Fällen fällt so viel":""}.<br>Quelle: MeteoSchweiz (Tageswerte, Symbol für den Tag).</p></div>`;}
 
 /* ---------- Jetzt gemessen: SwissMetNet-Stationen (10-Minuten-Werte von heute) ---------- */
 const SMN="https://data.geo.admin.ch/ch.meteoschweiz.ogd-smn";
@@ -267,7 +267,7 @@ async function fetchConditions(){let ok=0;progress("Lawinenbulletin laden",0,0,"
 async function condCenterPanel(){const s=await metaGet("slf",null),w=await metaGet("wx",null);const auto=ls("autocond")!=="0";
   return {title:"Lawinenbulletin & Wetter",icon:`<svg><use href="#i-snow"/></svg>`,html:`
    <div class="card"><h3>Gespeicherter Stand</h3><div class="q"><span class="grow">Lawinenbulletin (SLF)</span><b>${s?fmtDT(s.t):"–"}</b></div><div class="q"><span class="grow">Wetterprognose (MeteoSchweiz)</span><b>${w?fmtDT(w.t):"–"}</b></div>
-    <p class="muted small">Ganze Schweiz rund 3 MB, dazu der Tagesverlauf (5 Tage) für deine Orte und Touren. Danach für jeden Ort, jede Tour und «Ideen» ohne Netz verfügbar.</p>
+    <p class="muted small">Ganze Schweiz rund 3 MB, dazu der Tagesverlauf (4 Tage) für deine Orte und Touren. Danach für jeden Ort, jede Tour und «Ideen» ohne Netz verfügbar.</p>
     <button class="btn pri full" id="ccGo"><svg><use href="#i-down"/></svg>Jetzt aktualisieren</button></div>
    <label class="tg card"><span>Beim Öffnen automatisch aktualisieren<br><small class="muted">mit Netz, wenn der Stand älter als 6 Stunden ist</small></span><span class="sw2"><input type="checkbox" id="ccA"${auto?" checked":""}><i></i></span></label>
    <div class="btns"><button class="btn" id="ccHere"><svg><use href="#i-pin"/></svg>Für die Kartenmitte anzeigen</button></div>`,
