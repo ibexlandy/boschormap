@@ -1,4 +1,4 @@
-BoschorMap – v2.2 (privates Projekt)
+BoschorMap – v2.3 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,9 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v2.3
+- Tour-Fenster: Wettersymbol für heute (höchster Punkt der Tour) oben neben dem Namen; antippen öffnet direkt das Wetter.
 
 NEU IN v2.2
 - Wetter-Fenster: Knopf «Aktualisieren» oben neben dem Ortsnamen.

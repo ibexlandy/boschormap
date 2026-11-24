@@ -109,7 +109,9 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
   const along=line?S.points.filter(p=>!p.del&&t.bbox&&p.lat>t.bbox[0]-0.002&&p.lat<t.bbox[2]+0.002&&p.lon>t.bbox[1]-0.003&&p.lon<t.bbox[3]+0.003).map(p=>{let bi=0,bd=Infinity;
       for(let i=0;i<line.length;i+=2){const d=distM(p.lat,p.lon,line[i][0],line[i][1]);if(d<bd){bd=d;bi=i;}}return {p,bd,bi};}).filter(x=>x.bd<=100).sort((x,y)=>x.bi-y.bi):[];
   const est=estFor(t);const hasRaw=!idea&&!!(await getOne("raw",id));const winter=/ski|winter/.test(t.art);
-  return {title:t.name,icon:artIc(t.art),half:true,html:`
+  const wtop=prof.length?prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]):(t.bbox?{lat:(t.bbox[0]+t.bbox[2])/2,lon:(t.bbox[1]+t.bbox[3])/2,h:t.emax}:null);
+  const wx=wtop?await weatherAt(wtop.lat,wtop.lon,wtop.h).catch(()=>null):null;const wd=wx&&wx.days.find(d=>d.date===today());
+  return {title:t.name,icon:artIc(t.art),half:true,tools:wd&&wd.sy?`<button class="ib wxb" id="tWxTop" aria-label="Wetter heute: ${esc(wxText(wd.sy))}" title="Wetter heute: ${esc(wxText(wd.sy))} – antippen für Prognose und Bulletin">${wxIcon(wd.sy,28)}</button>`:"",html:`
    <div class="row" style="margin-bottom:8px"><span class="tag" style="background:${a.c};color:#fff">${a.n}</span><span class="tag">${idea?"Idee":fmtDate(t.date)}</span>${t.diff?`<span class="tag">${esc(t.diff)}</span>`:""}${t.fromIdea?`<span class="tag">aus Idee</span>`:""}</div>
    <div class="kv"><div><b>${fmtKm(t.dist)}</b><small>Distanz</small></div><div><b>${fmtN(t.up)} m</b><small>Aufstieg</small></div><div><b>${fmtN(t.down)} m</b><small>Abstieg</small></div>
     ${idea?`<div><b>≈ ${fmtDur(est)}</b><small>mit deinem Tempo</small></div>`:`<div><b>${fmtDur(t.moving)}</b><small>in Bewegung${t.total?` · gesamt ${fmtDur(t.total)}`:""}</small></div>`}
@@ -144,7 +146,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)ret
        await saveTour(n,line?line.map(p=>[p[0],p[1],p[2],null]):null);toast("Als Idee gespeichert");showTour(n.id,true);};
      $("#tGpx",P).onclick=async()=>{const L=await tourLine(t.id);if(!L)return toast("Linie fehlt (noch nicht abgeglichen?)");
        const wp=along.map(x=>({lat:x.p.lat,lon:x.p.lon,ele:x.p.hoehe,name:x.p.name}));download(`${fileSafe(t.name)}.gpx`,toGPX(t.name,L,wp),"application/gpx+xml");};
-     $("#tCond",P).onclick=()=>{const top=prof.length?prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]):null;const c=top||{lat:(t.bbox[0]+t.bbox[2])/2,lon:(t.bbox[1]+t.bbox[3])/2,h:t.emax};openPanel(()=>conditionsPanel(c.lat,c.lon,c.h,t.name));};
+     $("#tCond",P).onclick=()=>{const top=prof.length?prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]):null;const c=top||{lat:(t.bbox[0]+t.bbox[2])/2,lon:(t.bbox[1]+t.bbox[3])/2,h:t.emax};openPanel(()=>conditionsPanel(c.lat,c.lon,c.h,t.name));};if($("#tWxTop",P))$("#tWxTop",P).onclick=$("#tCond",P).onclick;
      $("#tChk",P).onclick=()=>openPanel(()=>checklistPanel(t.art));
      const rw=$("#tRaw",P);if(rw)rw.onclick=async()=>{const r=await getOne("raw",t.id);const g=parseGPX(r.gpx);S._selLine=g.pts.map(p=>[p[0],p[1]]);map.render();
        const st=trackStats(g.pts,g.pts.some(p=>p[3]));toast(`Original: ${fmtKm(st.dist)}, ↑${fmtN(st.up)} m, ${fmtDur(st.moving)} in Bewegung`,5000);};
