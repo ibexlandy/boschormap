@@ -314,7 +314,7 @@ function bindSteep(P,prof,si){const b=$("[data-steepmap]",P);if(!b)return;b.oncl
 function diffHTML(d){if(!d)return "";return `<div class="card"><h3>Schwierigkeit (Vorschlag)</h3><div class="row"><span class="tag" style="font-size:15px">${esc(d.lvl)}</span><span class="grow muted small">${/Skirouten/.test(d.src||"")?"laut":"schwierigster Abschnitt laut"} ${d.src||"OpenStreetMap"} (${d.scale}-Skala) · Angaben für ${d.cov} % der Strecke</span>
    ${d.lat!=null&&!/Skirouten/.test(d.src||"")?`<button class="btn sm" data-diffshow="${d.lat},${d.lon}">Stelle zeigen</button>`:""}</div>${/Skirouten/.test(d.src||"")?`<div class="muted small" style="margin-top:4px">swisstopo gibt die Schwierigkeit für die ganze Route an, nicht für einzelne Stellen.</div>`:""}
    <div class="small" style="margin-top:6px">${d.km.map(([k,m])=>`${k}: ${fmtN(m/1000,1)} km`).join(" · ")}</div>${d.names&&d.names.length?`<div class="muted small" style="margin-top:4px">Skirouten: ${d.names.map(esc).join(" · ")}</div>`:""}</div>`;}
-function bindDiff(P){$$("[data-diffshow]",P).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.diffshow.split(",").map(Number);setTemp(la,lo);map.flyTo(la,lo,Math.max(map.z,15));});}
+function bindDiff(P){$$("[data-diffshow]",P).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.diffshow.split(",").map(Number);setTemp(la,lo);focusAt(la,lo,Math.max(map.z,15));});}
 async function planRoute(){const ps=planState;if(!ps)return;ps.busy++;planMarkers();map.render();
   try{const n=ps.wps.length;const segs=[];let fail=0,via=0;
     for(let i=1;i<n;i++){const a=ps.wps[i-1],b=ps.wps[i];const old=ps.segs[i-1];

@@ -161,3 +161,7 @@ button.q.gb{width:100%;background:none;border:0;text-align:left;font:inherit;col
 .rsrow{display:flex;align-items:center;gap:6px;width:100%}.rsrow .grow{flex:1}.rsrow .btn.sm.ic{padding:6px 8px}.rsrow .btn.sm.ic svg{width:20px;height:20px}.rstx{width:100%;font-size:14px;line-height:1.35}.rstx small{font-size:12.5px}
 .rsrow{flex-wrap:wrap}.rsrow .chip{white-space:nowrap;padding:6px 10px}.rsbt{display:flex;gap:6px;margin-left:auto;align-items:center}
 .li .snip{display:block;font-size:12.5px;color:var(--mu);margin-top:2px;white-space:normal;line-height:1.35}.li .snip mark{background:#ffe58a;color:inherit;border-radius:3px;padding:0 1px}
+.tmp{width:36px;height:48px}.tmp svg{width:36px;height:48px;stroke:none;fill:none;overflow:visible;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));animation:pindrop .45s cubic-bezier(.3,1.4,.5,1) both;transform-origin:50% 100%}
+.tmp .tsh{fill:rgba(0,0,0,.25)}@keyframes pindrop{0%{transform:translateY(-28px) scale(.8);opacity:0}60%{opacity:1}100%{transform:none}}
+.btn3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.btn3 .btn{justify-content:center;padding-left:4px;padding-right:4px;white-space:nowrap}
+.btn3 .btn{min-width:0;font-size:14px;gap:5px;overflow:hidden}.btn3 .btn svg{flex:none;width:18px;height:18px}

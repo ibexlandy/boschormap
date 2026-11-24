@@ -135,7 +135,10 @@ async function namesAt(lat,lon,x,y){const tolPx=28;const mpp=40075016*Math.cos(l
   if(!out.length){const L=await searchOfflineNames("");for(const n of (namesCache||[]))if(distM(lat,lon,n.lat,n.lon)<rad*1.5)out.push({name:n.name,kind:n.kind,lat:n.lat,lon:n.lon});}
   const seen=new Set();return out.map(n=>Object.assign(n,{cat:nameCat(n.kind,n.name),d:distM(lat,lon,n.lat,n.lon)})).filter(n=>{const k=n.name+"|"+n.kind;if(seen.has(k))return false;seen.add(k);return true;})
     .sort((a,b)=>(a.area-b.area)||a.d-b.d).slice(0,6);}
-function setTemp(lat,lon){clearTemp();tempMk=map.addMarker({lat,lon,cls:"tmp",anchor:[13,26],html:`<svg><use href="#i-pin"/></svg>`,z:50});}
+function setTemp(lat,lon){clearTemp();tempMk=map.addMarker({lat,lon,cls:"tmp",anchor:[18,46],html:`<svg viewBox="0 0 36 48"><ellipse class="tsh" cx="18" cy="46" rx="6" ry="2"/><path d="M18 45C18 45 3 28 3 17a15 15 0 0 1 30 0c0 11-15 28-15 28z" fill="#c8102e" stroke="#7d0a1c" stroke-width="1.5"/><circle cx="18" cy="17" r="5.5" fill="#fff"/></svg>`,z:50});}
+/* Punkt so anfliegen, dass er mitten im sichtbaren Kartenteil liegt (nicht unter dem Fenster) */
+function sheetCover(){const sh=$("#sheet");if(innerWidth>=900||!sh||!sh.classList.contains("open"))return 0;const p=$("#panel");return p?Math.min(p.offsetHeight,$("#mapWrap").clientHeight*0.8):0;}
+function focusAt(lat,lon,z){z=z??map.z;const S=256*Math.pow(2,z);map.flyTo(BMap.yLat(BMap.latY(lat)+sheetCover()/2/S),BMap.xLon(BMap.lonX(lon)+sheetPadR()/2/S),z);}
 function clearTemp(){if(tempMk){map.removeMarker(tempMk);tempMk=null;}}
 
 /* ---------- Punkte auf der Karte ---------- */
@@ -310,11 +313,12 @@ function searchPanel(){return {title:"Suchen",icon:`<svg><use href="#i-search"/>
       const sn=$("#snames",P);if(sn){sn.innerHTML=nh?`<h3 class="muted small" style="margin:10px 0 6px">KARTE / ORTSNAMEN</h3>`+nh:(navigator.onLine?"":`<p class="muted small">Offline: gesucht wird in eigenen Orten, Touren und den Namen gespeicherter Regionen.</p>`);bindRes(sn);}},250);};
     function resRow(n,src){return `<button class="li" data-ll="${n.lat},${n.lon}" data-nm="${esc(n.name)}" data-kind="${esc(n.kind||"")}" data-h="${n.h||""}"><span class="ic" style="background:#8a8f94"><svg><use href="#i-pin"/></svg></span><span class="t"><b>${esc(n.name)}</b><small>${esc(n.kind?n.kind+" · ":"")}${src}</small></span></button>`;}
     function bindRes(el){$$("[data-p]",el).forEach(b=>b.onclick=()=>showPoint(b.dataset.p));$$("[data-t]",el).forEach(b=>b.onclick=()=>showTour(b.dataset.t));
-      $$("[data-ll]",el).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.ll.split(",").map(Number);map.flyTo(la,lo,Math.max(map.z,14));setTemp(la,lo);
+      $$("[data-ll]",el).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.ll.split(",").map(Number);const fz=Math.max(map.z,14);setTemp(la,lo);
         const nm=b.dataset.nm.replace(/^(Alpiner Gipfel|Gipfel|Hauptgipfel|Huegel|Hügel|Pass|See|Huette|Hütte|Alpine Huette|Ort)\s+/,"").replace(/\s*\([A-Z]{2}\).*$/,"");
         const kind=(b.dataset.nm+" "+b.dataset.kind).toLowerCase();const cat=/gipfel|huegel|hügel|grat|horn/.test(kind)?"gipfel":/h(ü|ue)tte|biwak/.test(kind)?"huette":/pass/.test(kind)?"pass":/see\b/.test(kind)?"see":"ort";
-        replacePanel(()=>({title:nm,half:true,html:`<div class="card muted">${esc(b.dataset.nm)}</div><div class="btns"><button class="btn pri" id="srP"><svg><use href="#i-pin"/></svg>Als ${CATS[cat].n} übernehmen</button><button class="btn" id="srR"><svg><use href="#i-flag"/></svg>Tour hierhin planen</button><button class="btn" id="srW"><svg><use href="#i-sun"/></svg>Wetter & Bulletin</button></div>`,
-          after(P2){$("#srP",P2).onclick=()=>{clearTemp();newPoint(la,lo,{name:nm,cat});};$("#srR",P2).onclick=()=>{clearTemp();closePanel();startPlan({end:[la,lo]});};
+        const sub=b.dataset.nm!==nm?b.dataset.nm:(b.dataset.kind||"");
+        replacePanel(()=>({title:nm,half:true,html:`${sub?`<p class="muted small" style="margin:0 0 10px">${esc(sub)}</p>`:""}<div class="btn3"><button class="btn pri" id="srP"><svg><use href="#i-pin"/></svg>Speichern</button><button class="btn" id="srR"><svg><use href="#i-flag"/></svg>Planen</button><button class="btn" id="srW"><svg><use href="#i-sun"/></svg>Wetter</button></div>`,
+          onClose:clearTemp,after(P2){requestAnimationFrame(()=>focusAt(la,lo,fz));$("#srP",P2).title=`Als ${CATS[cat].n} übernehmen`;$("#srP",P2).onclick=()=>{clearTemp();newPoint(la,lo,{name:nm,cat});};$("#srR",P2).onclick=()=>{clearTemp();closePanel();startPlan({end:[la,lo]});};
             $("#srW",P2).onclick=()=>openPanel(()=>conditionsPanel(la,lo,null,nm));}}));});}
     q.onkeydown=e=>{if(e.key==="Enter")q.blur();};}};}
 
