@@ -1,4 +1,4 @@
-BoschorMap – v2.8 (privates Projekt)
+BoschorMap – v2.9 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,12 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v2.9
+- PC/Browser: Kartenknöpfe bleiben rechts stehen, wenn ein Fenster offen ist; das Fenster öffnet sich links daneben.
+- Suche: Koordinaten mit Punkt als Tausendertrenner (706.700 / 257.508 oder 2.706.700 / 1.257.508) werden erkannt.
+- Handy: Kurze Fenster (z. B. Suchtreffer) werden beim Hochziehen nicht mehr auf ganze Höhe mit leerer Fläche aufgeblasen.
+- Fehler behoben: Das Kreuz im Suchtreffer-Fenster schliesst das Fenster wieder (seit v2.8 ohne Wirkung).
 
 NEU IN v2.8
 - Suche: Treffer bekommt eine grosse rote Nadel (wie Google Maps) und liegt sichtbar über dem Ergebnis-Fenster statt darunter; Ergebnis-Fenster kompakter (Speichern · Planen · Wetter).

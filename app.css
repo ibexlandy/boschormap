@@ -44,12 +44,12 @@ input,select,textarea{font:inherit;color:inherit}
 #bar button.on{color:var(--nacht);font-weight:600}#bar button.on svg{color:var(--rot)}
 #sheet{position:fixed;left:0;right:0;bottom:calc(var(--bar) + env(safe-area-inset-bottom));top:calc(var(--top) + env(safe-area-inset-top) + 40px);z-index:40;pointer-events:none}
 #panel{position:absolute;left:0;right:0;bottom:0;max-height:100%;background:var(--bg);border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.2);overflow:auto;transform:translateY(calc(100% + var(--bar) + 40px));transition:transform .22s ease;pointer-events:auto;overscroll-behavior:contain}
-#sheet.canhalf:not(.half){top:calc(var(--top) + env(safe-area-inset-top))}#sheet.canhalf:not(.half) #panel{border-radius:0;height:100%}
+#sheet.canhalf:not(.half){top:calc(var(--top) + env(safe-area-inset-top))}#sheet.canhalf:not(.half) #panel{border-radius:0;height:auto;min-height:0;max-height:100%}#sheet.canhalf:not(.half) #panel.tall{height:100%}
 #sheet.open #panel{transform:none}#sheet.half #panel{max-height:62%}
 .grab{display:block;width:100%;height:22px;border:0;background:var(--bg);position:sticky;top:0;z-index:3;padding:0;touch-action:none}.grab i{display:block;width:44px;height:5px;border-radius:3px;background:#b9c2ca;margin:8px auto 0}
 #sheet.canhalf .ph{top:22px}
-@media(min-width:900px){.grab{display:none}#sheet.canhalf:not(.half){top:calc(var(--top) + 8px)}#sheet.canhalf:not(.half) #panel{border-radius:16px;height:auto}#sheet.canhalf .ph{top:0}#sheet{top:calc(var(--top) + 8px);left:auto;width:440px;right:8px;bottom:calc(var(--bar) + 8px)}#panel{border-radius:16px;bottom:0;transform:translateX(110%)}#sheet.half #panel{max-height:100%}
-  #modebar{right:62px;left:8px;max-width:calc(100% - 520px)}.so .mapbtns{right:460px}.so #attr{right:456px}}
+@media(min-width:900px){.grab{display:none}#sheet.canhalf:not(.half){top:calc(var(--top) + 8px)}#sheet.canhalf:not(.half) #panel{border-radius:16px;height:auto}#sheet.canhalf .ph{top:0}#sheet{top:calc(var(--top) + 8px);left:auto;width:440px;right:62px;bottom:calc(var(--bar) + 8px)}#panel{border-radius:16px;bottom:0;transform:translateX(110%)}#sheet.half #panel{max-height:100%}
+  #modebar{right:62px;left:8px;max-width:calc(100% - 570px)}.so #attr{right:510px}}
 .ph{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;gap:6px;padding:8px 8px 6px 8px;z-index:2;border-bottom:1px solid var(--li)}
 .ph h2{flex:1;margin:0;font-size:17px;display:flex;align-items:center;gap:8px;min-width:0}.ph h2 span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ph .ib{color:var(--nacht);width:38px;height:38px}.ph .ib:active{background:var(--li)}
@@ -123,7 +123,7 @@ hr{border:0;border-top:1px solid var(--li);margin:10px 0}
 .phl{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--li)}.phl img{width:56px;height:56px;object-fit:cover;border-radius:8px;background:var(--gl2)}.phl span{flex:1}
 .wpmenu{position:absolute;z-index:12;background:#fff;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.28);padding:8px;display:flex;flex-direction:column;gap:4px;min-width:190px}.wpmenu b{font-size:13px;padding:2px 6px}.wpmenu button{display:flex;align-items:center;gap:8px;border:0;background:var(--gl2);border-radius:8px;padding:9px 10px;text-align:left;font-size:14px}.wpmenu button svg{width:17px;height:17px}.wpmenu small{color:#62707d;padding:0 6px;font-size:11px}
 #modebar:has(#plX){flex-wrap:nowrap}#modebar:has(#plX) .chip{padding:6px 10px;white-space:nowrap}#modebar:has(#plX) .btn.sm{flex:none}
-@media(min-width:900px){#modebar:has(#plX){right:auto;max-width:calc(100% - 540px)}}
+@media(min-width:900px){#modebar:has(#plX){right:auto;max-width:calc(100% - 590px)}}
 .plfoot{position:sticky;bottom:0;z-index:2;display:flex;gap:6px;flex-wrap:wrap;background:var(--bg);padding:10px 0 4px;margin-top:8px;border-top:1px solid var(--li)}.plfoot .btn{flex:1;justify-content:center;min-width:0}.plfoot .btn.pri{flex:1.6}
 .bsec{margin-top:6px}.bsec b{display:block;color:#1f3a52}.bsec p{margin:2px 0 0}
 .pfoot{position:sticky;bottom:0;z-index:3;display:flex;gap:6px;background:var(--bg);padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--li);box-shadow:0 -8px 14px -8px rgba(10,25,40,.25)}.pfoot .btn{flex:1;justify-content:center;min-width:0}.pfoot .btn.pri{flex:1.5}

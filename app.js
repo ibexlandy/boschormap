@@ -41,7 +41,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$(".pbig")&&nav.le
 
 /* Höhe, die ein halbes Panel auf dem Handy über der Karte belegt */
 const sheetPad=()=>innerWidth<900?Math.round(($("#mapWrap").clientHeight)*(ls("sheetFull")==="1"?0.2:0.62)):0;
-const sheetPadR=()=>innerWidth>=900?460:0;
+const sheetPadR=()=>innerWidth>=900?510:0;
 /* ---------- Sterne ---------- */
 function starsHTML(v,key,ro){v=+v||0;let s=`<span class="stars${ro?" ro":""}"${key?` data-stars="${key}"`:""}>`;for(let i=1;i<=5;i++)s+=ro?`<svg class="${i<=v?"on":""}" style="color:${i<=v?"#e0a100":"#c9ced3"}"><use href="#i-star"/></svg>`:`<button type="button" class="${i<=v?"on":""}" data-v="${i}" aria-label="${i} Sterne"><svg><use href="#i-star"/></svg></button>`;return s+"</span>";}
 function bindStars(root){$$("[data-stars]",root).forEach(w=>{w.querySelectorAll("button").forEach(b=>b.onclick=()=>{const cur=+w.dataset.val||$$("button.on",w).length;let v=+b.dataset.v;if(v===cur)v=0;w.dataset.val=v;
@@ -282,7 +282,9 @@ async function showGallery(ids,start,go_){ids=(ids||[]).filter(Boolean);if(!ids.
 /* ---------- Suche: eigene Orte und Touren, gespeicherte Namen (offline), geo.admin (online) ---------- */
 const normS=x=>String(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 /* Koordinaten erkennen: LV95 (2'600'000 / 1'200'000), LV03 (600000 / 200000), WGS84 dezimal (46.5, 8.1) oder Grad/Minuten/Sekunden */
-function parseCoord(s){const t=s.replace(/[’'`´]/g,"").trim();
+function parseCoord(s){const r=parseCoord1(s);if(r||!/\d\.\d{3}(?!\d)/.test(s))return r;return parseCoord1(s.replace(/(\d)\.(?=\d{3}(?!\d))/g,"$1"));}
+/* Punkt als Tausendertrenner (706.700 / 257.508) wird nur versucht, wenn die Lesart als Dezimalzahl nichts ergibt */
+function parseCoord1(s){const t=s.replace(/[’'`´]/g,"").trim();
   const dms=[...t.matchAll(/(\d{1,2})\s*°\s*(?:(\d{1,2}(?:\.\d+)?)\s*[′']?\s*(?:(\d{1,2}(?:\.\d+)?)\s*["″]?)?)?\s*([NSEOW])?/gi)];
   let a,b;if(dms.length>=2){const v=m=>+m[1]+(+(m[2]||0))/60+(+(m[3]||0))/3600;a=v(dms[0]);b=v(dms[1]);}
   else{const n=t.match(/^[NE]?\s*(-?\d+(?:\.\d+)?)\s*[,;/\s]\s*[NE]?\s*(-?\d+(?:\.\d+)?)\s*$/i);if(!n)return null;a=+n[1];b=+n[2];}
@@ -318,7 +320,7 @@ function searchPanel(){return {title:"Suchen",icon:`<svg><use href="#i-search"/>
         const kind=(b.dataset.nm+" "+b.dataset.kind).toLowerCase();const cat=/gipfel|huegel|hügel|grat|horn/.test(kind)?"gipfel":/h(ü|ue)tte|biwak/.test(kind)?"huette":/pass/.test(kind)?"pass":/see\b/.test(kind)?"see":"ort";
         const sub=b.dataset.nm!==nm?b.dataset.nm:(b.dataset.kind||"");
         replacePanel(()=>({title:nm,half:true,html:`${sub?`<p class="muted small" style="margin:0 0 10px">${esc(sub)}</p>`:""}<div class="btn3"><button class="btn pri" id="srP"><svg><use href="#i-pin"/></svg>Speichern</button><button class="btn" id="srR"><svg><use href="#i-flag"/></svg>Planen</button><button class="btn" id="srW"><svg><use href="#i-sun"/></svg>Wetter</button></div>`,
-          onClose:clearTemp,after(P2){requestAnimationFrame(()=>focusAt(la,lo,fz));$("#srP",P2).title=`Als ${CATS[cat].n} übernehmen`;$("#srP",P2).onclick=()=>{clearTemp();newPoint(la,lo,{name:nm,cat});};$("#srR",P2).onclick=()=>{clearTemp();closePanel();startPlan({end:[la,lo]});};
+          after(P2){requestAnimationFrame(()=>focusAt(la,lo,fz));$("#srP",P2).title=`Als ${CATS[cat].n} übernehmen`;$("#srP",P2).onclick=()=>{clearTemp();newPoint(la,lo,{name:nm,cat});};$("#srR",P2).onclick=()=>{clearTemp();closePanel();startPlan({end:[la,lo]});};
             $("#srW",P2).onclick=()=>openPanel(()=>conditionsPanel(la,lo,null,nm));}}));});}
     q.onkeydown=e=>{if(e.key==="Enter")q.blur();};}};}
 
