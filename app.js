@@ -186,6 +186,13 @@ async function newPoint(lat,lon,pre){const p=Object.assign({id:uid(),cat:"gipfel
   if(p.hoehe==null){const h=await heightAt(lat,lon);if(h!=null){p.hoehe=h;p.hq="swisstopo";const el=$("#fH");if(el&&!el.value){el.value=h;el.defaultValue=String(h);const q=$("#fHq");if(q)q.textContent="automatisch (swisstopo)";}}}}
 /* Entfernte Kategorien (z. B. «Start / Parkplatz») werden zu «Schöner Ort» */
 function fixCats(){const ch=[];for(const p of S.points)if(!CATS[p.cat]){p.cat="ort";p.mod=Date.now();ch.push(p);}if(ch.length)putMany("points",ch).catch(()=>{});}
+/* Android: nach dem Schliessen der Tastatur blieb die Seite teils verschoben/zu hoch – die untere Leiste rutschte aus dem Bild.
+   Darum Höhe an das echte Fenster binden und eine verschobene Seite zurücksetzen. */
+function fitViewport(){const h=Math.round((window.visualViewport&&!document.activeElement?.matches?.("input,textarea"))?Math.max(innerHeight,visualViewport.height):innerHeight);
+  document.body.style.height=h+"px";if(scrollX||scrollY)scrollTo(0,0);const de=document.documentElement;if(de.scrollTop)de.scrollTop=0;if(document.body.scrollTop)document.body.scrollTop=0;}
+addEventListener("resize",fitViewport);addEventListener("orientationchange",()=>setTimeout(fitViewport,300));
+if(window.visualViewport)visualViewport.addEventListener("resize",()=>setTimeout(fitViewport,50));
+document.addEventListener("focusout",()=>setTimeout(fitViewport,250));addEventListener("pageshow",fitViewport);setTimeout(fitViewport,0);
 function editPointPanel(p,isNew){return {title:isNew?"Neuer Ort":"Ort bearbeiten",icon:catIc(p.cat),html:`
   <div class="card"><label class="f">Kategorie</label><div class="chips" id="fCats">${Object.entries(CATS).map(([k,c])=>`<button class="chip${p.cat===k?" on":""}" data-c="${k}">${c.n}</button>`).join("")}</div>
    <label class="f">Name</label><input class="inp" id="fName" value="${esc(p.name)}" placeholder="z. B. Piz Palü" autocomplete="off">

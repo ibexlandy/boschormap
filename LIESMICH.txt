@@ -1,4 +1,4 @@
-BoschorMap – v3.4 (privates Projekt)
+BoschorMap – v3.5 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,9 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v3.5
+- Handy: Untere Leiste (Orte, Touren …) verschwand teils nach dem Tippen in einem Fenster (Tastatur) – Seitenhöhe wird jetzt laufend ans Fenster angepasst.
 
 NEU IN v3.4
 - Ebene «Alpine Auen ausserhalb Bundesinventar» wieder entfernt (war eingeschaltet → verschwindet ohne Fehler).
