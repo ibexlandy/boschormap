@@ -56,7 +56,7 @@ async function syncDrive(quiet){if(syncing)return;if(!gdClient()){if(!quiet)open
     P("Dateien auf Drive lesen …");let files=await gdList();const byName=new Map(files.map(f=>[f.name,f]));
     /* 1. Daten (Orte, Touren, Einstellungen) zusammenführen – neuere Änderung gewinnt */
     const df=byName.get(GD_DATA);let rem=null;if(df){P("Daten laden …");rem=JSON.parse(await gunzip(await gdGet(df.id)));}
-    if(rem&&rem.app==="boschormap"){const mp=mergeArr(S.points,rem.points);if(mp.changed.length)await putMany("points",mp.changed);S.points=mp.all;
+    if(rem&&rem.app==="boschormap"){const mp=mergeArr(S.points,rem.points);if(mp.changed.length)await putMany("points",mp.changed);S.points=mp.all;fixCats();
       const locT=new Map(S.tours.map(t=>[t.id,t]));const mt=mergeArr(S.tours,rem.tours);for(const t of mt.changed){const l=locT.get(t.id);if(l&&l.lineRev===t.lineRev&&l.disp){t.disp=l.disp;}}
       if(mt.changed.length)await putMany("tours",mt.changed);S.tours=mt.all;
       if(rem.settings&&(rem.settings.mod||0)>(S.settings.mod||0)){S.settings=Object.assign(settingsDefault(),rem.settings);await metaSet("settings",S.settings);}}
@@ -135,7 +135,7 @@ async function importBackup(file){let text;if(await isEncrypted(file)){const pw=
   progress("Sicherung einlesen",0,0,file.name);try{const j=JSON.parse(text!=null?text:await file.text());if(j.app!=="boschormap")throw new Error("Keine Boschor-Map-Sicherung");
     const replace=confirm("Alles ersetzen?\n\nOK = alle Daten auf diesem Gerät durch die Sicherung ersetzen\nAbbrechen = zusammenführen (neuere Version gewinnt)");
     if(replace){for(const st of ["points","tours","lines","raw","photos"]){const d=await db();await new Promise(r=>{const t=d.transaction(st,"readwrite");t.objectStore(st).clear();t.oncomplete=r;});}S.points=[];S.tours=[];}
-    const mp=mergeArr(S.points,j.points);await putMany("points",mp.changed);S.points=mp.all;
+    const mp=mergeArr(S.points,j.points);await putMany("points",mp.changed);S.points=mp.all;fixCats();
     const lm=new Map((j.lines||[]).map(l=>[l.id,l]));const mt=mergeArr(S.tours,j.tours);
     for(const t of mt.changed){const l=lm.get(t.id);if(l){t.disp=simplify(l.line,4).map(p=>[r5(p[0]),r5(p[1])]);t.bbox=bboxOf(l.line);await put("lines",l);}}await putMany("tours",mt.changed);S.tours=mt.all;
     for(const r of j.raw||[])if(mt.changed.some(t=>t.id===r.id))await put("raw",r);

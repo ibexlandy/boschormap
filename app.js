@@ -64,13 +64,14 @@ function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,max
   setBase(v.base||"lk");for(const k in OVERLAYS)if(v.ov&&v.ov[k])setOverlay(k,true);
   map.addDrawer(drawTours);map.addDrawer(drawMisc);map.addDrawer(drawSteep);map.addDrawer(drawCheck);map.addDrawer(drawHeat);
   map.on("moveend",()=>{const c=map.getCenter();ls("lastview",JSON.stringify({lat:+c.lat.toFixed(5),lon:+c.lon.toFixed(5),z:Math.round(map.z*4)/4}));});
-  map.on("move",()=>{$("#map").classList.toggle("zl",map.z>=13);});
+  const zInd=()=>{const e=$("#zInd");if(e)e.textContent="Zoom "+Math.round(map.z);};zInd();
+  map.on("move",()=>{$("#map").classList.toggle("zl",map.z>=13);zInd();});
   map.on("click",onMapClick);map.on("markerclick",onMarkerClick);map.on("longpress",onLongPress);
   $("#bZin").onclick=()=>map.zoomAnim(Math.round(map.z)+1);$("#bZout").onclick=()=>map.zoomAnim(Math.round(map.z)-1);
   $("#bLayers").onclick=()=>openPanel(layersPanel);$("#bLoc").onclick=toggleLocate;$("#bCam").onclick=tripCam;$("#bAdd").onclick=startPlace;}
 function setBase(k){const b=BASES[k]||BASES.lk;if(baseLayer)map.removeLayer(baseLayer);
   baseLayer=map.addLayer(new BMap.TileLayer({url:layerUrl(b.id,b.f),max:b.max,min:7,z:1,bounds:CH_BOUNDS}));const v=viewPrefs();v.base=k;saveViewPrefs(v);}
-function setOverlay(k,on){const o=OVERLAYS[k];if(ovLayers[k]){ovLayers[k].forEach(l=>map.removeLayer(l));delete ovLayers[k];}
+function setOverlay(k,on){const o=OVERLAYS[k];if(ovLayers[k]){ovLayers[k].forEach(l=>map.removeLayer(l));delete ovLayers[k];}if(!o)return;
   if(on)ovLayers[k]=o.ids.map((id,i)=>map.addLayer(new BMap.TileLayer({url:layerUrl(id,"png"),max:o.max,min:7,hideBelow:o.from,z:10+Object.keys(OVERLAYS).indexOf(k)*2+i,opacity:o.op,bounds:CH_BOUNDS})));
   const v=viewPrefs();v.ov=v.ov||{};v.ov[k]=!!on;saveViewPrefs(v);}
 function layersPanel(){const v=viewPrefs();
@@ -182,20 +183,22 @@ function modebar(html){const mb=$("#modebar");if(!html){mb.hidden=true;mb.innerH
 async function savePoint(p){p.mod=Date.now();await put("points",p);const i=S.points.findIndex(x=>x.id===p.id);if(i<0)S.points.push(p);else S.points[i]=p;markDirty();refreshMarkers();}
 async function newPoint(lat,lon,pre){const p=Object.assign({id:uid(),cat:"gipfel",name:"",lat,lon,hoehe:null,hq:"",visits:[],photos:[],note:"",rate:{},created:Date.now()},pre||{});
   openPanel(()=>editPointPanel(p,true));
-  if(p.hoehe==null){const h=await heightAt(lat,lon);if(h!=null){p.hoehe=h;p.hq="swisstopo";const el=$("#fH");if(el&&!el.value){el.value=h;const q=$("#fHq");if(q)q.textContent="automatisch (swisstopo)";}}}}
+  if(p.hoehe==null){const h=await heightAt(lat,lon);if(h!=null){p.hoehe=h;p.hq="swisstopo";const el=$("#fH");if(el&&!el.value){el.value=h;el.defaultValue=String(h);const q=$("#fHq");if(q)q.textContent="automatisch (swisstopo)";}}}}
+/* Entfernte Kategorien (z. B. «Start / Parkplatz») werden zu «Schöner Ort» */
+function fixCats(){const ch=[];for(const p of S.points)if(!CATS[p.cat]){p.cat="ort";p.mod=Date.now();ch.push(p);}if(ch.length)putMany("points",ch).catch(()=>{});}
 function editPointPanel(p,isNew){return {title:isNew?"Neuer Ort":"Ort bearbeiten",icon:catIc(p.cat),html:`
   <div class="card"><label class="f">Kategorie</label><div class="chips" id="fCats">${Object.entries(CATS).map(([k,c])=>`<button class="chip${p.cat===k?" on":""}" data-c="${k}">${c.n}</button>`).join("")}</div>
    <label class="f">Name</label><input class="inp" id="fName" value="${esc(p.name)}" placeholder="z. B. Piz Palü" autocomplete="off">
-   <label class="f">Höhe (m ü. M.) <span class="muted small" id="fHq">${p.hq==="swisstopo"?"automatisch (swisstopo)":p.hoehe!=null?"von Hand":"wird automatisch geholt (online)"}</span></label>
-   <input class="inp" id="fH" inputmode="numeric" value="${p.hoehe!=null?p.hoehe:""}">
+   ${isNew?"":`<label class="f">Höhe (M.ü.M.) <span class="muted small" id="fHq">${p.hq==="swisstopo"?"automatisch (swisstopo)":p.hoehe!=null?"von Hand":"wird automatisch geholt (online)"}</span></label>`}
+   <input class="inp" id="fH" inputmode="numeric" value="${p.hoehe!=null?p.hoehe:""}"${isNew?" hidden":""} aria-label="Höhe in M.ü.M.">
    <label class="f">Notiz</label><textarea class="inp" id="fNote">${esc(p.note)}</textarea></div>
   <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((p.rate||{}).gesamt,"gesamt")}</div><div id="fCrit"></div></div>
-  ${isNew&&p.cat==="gipfel"?`<label class="tg card"><span>Ich war schon oben (heute als Besuch eintragen)</span><span class="sw2"><input type="checkbox" id="fVis"><i></i></span></label>`:""}
+  ${isNew&&p.cat==="gipfel"?`<label class="tg card"><span>Besucht</span><span class="sw2"><input type="checkbox" id="fVis"><i></i></span></label>`:""}
   <button class="btn pri full" id="fSave"><svg><use href="#i-check"/></svg>Speichern</button>`,
   after(P){const crit=()=>{const c=$("#fCats .on",P).dataset.c;$("#fCrit",P).innerHTML=(CRIT[c]||[]).map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((p.rate||{})[k],k)}</div>`).join("");bindStars($("#fCrit",P));};
     crit();$$("#fCats .chip",P).forEach(b=>b.onclick=()=>{$$("#fCats .chip",P).forEach(x=>x.classList.remove("on"));b.classList.add("on");crit();});
     if(isNew)setTimeout(()=>{const n=$("#fName",P);if(n&&P.contains(n))n.focus();},250);
-    $("#fH",P).oninput=()=>{$("#fHq",P).textContent="von Hand";};
+    $("#fH",P).oninput=()=>{const q=$("#fHq",P);if(q)q.textContent="von Hand";};
     $("#fSave",P).onclick=async()=>{p.cat=$("#fCats .on",P).dataset.c;p.name=$("#fName",P).value.trim()||CATS[p.cat].n;const h=parseFloat($("#fH",P).value);
       if(isFinite(h)){if(h!==p.hoehe)p.hq=$("#fHq",P).textContent.startsWith("auto")?"swisstopo":"hand";p.hoehe=Math.round(h);}else p.hoehe=null;
       p.note=$("#fNote",P).value.trim();p.rate={gesamt:starVal(P,"gesamt")};for(const [k] of (CRIT[p.cat]||[]))p.rate[k]=starVal(P,k);
@@ -219,7 +222,7 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(p)rememberO
   const wx=await weatherAt(p.lat,p.lon,p.hoehe).catch(()=>null);const wd=wx&&wx.days.find(d=>d.date===today());
   return {title:p.name||k.n,icon:catIc(p.cat),half:true,tools:wd&&wd.sy?`<button class="ib wxb" id="pWxTop" aria-label="Wetter heute: ${esc(wxText(wd.sy))}" title="Wetter heute: ${esc(wxText(wd.sy))} – antippen für Prognose und Bulletin">${wxIcon(wd.sy,28)}</button>`:"",html:`
    <div class="card"><div class="row"><span class="tag">${k.n}</span>${p.cat==="gipfel"?`<span class="tag" style="background:${vis.length?"#e8f5e9":"#fff3e0"};color:${vis.length?"#2e7d32":"#b26a00"}">${vis.length?`schon oben (${vis.length}×)`:"noch offen"}</span>`:""}
-    <span class="grow"></span><b>${p.hoehe!=null?fmtN(p.hoehe)+" m":""}</b></div>
+    <span class="grow"></span><b>${p.hoehe!=null?fmtN(p.hoehe)+" M.ü.M.":""}</b></div>
     ${(p.rate||{}).gesamt?`<div class="crit"><span>Gesamt</span>${starsHTML(p.rate.gesamt,"",1)}</div>`:""}
     ${(CRIT[p.cat]||[]).filter(([c])=>(p.rate||{})[c]).map(([c,n])=>`<div class="crit"><span class="muted">${n}</span>${starsHTML(p.rate[c],"",1)}</div>`).join("")}
     ${p.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(p.note)}</p>`:""}</div>
@@ -403,7 +406,7 @@ async function bootApp(){if(gdPopupReturn())return;
   initMap();
   await loadSettings();
   const [pts,tours]=await Promise.all([getAll("points"),getAll("tours")]);
-  const cut=Date.now()-30*864e5;S.points=pts.filter(p=>!(p.del&&p.del<cut&&p.mod<cut));S.tours=tours;
+  const cut=Date.now()-30*864e5;S.points=pts.filter(p=>!(p.del&&p.del<cut&&p.mod<cut));S.tours=tours;fixCats();
   refreshMarkers();map.render();
   $$("#bar button").forEach(b=>b.onclick=()=>{const g=b.dataset.go;if(planState&&g!=="plan")return toast("Zuerst die Planung beenden oder speichern");
     closePanel();$$("#bar button").forEach(x=>x.classList.toggle("on",x===b));

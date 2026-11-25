@@ -32,7 +32,7 @@ async function regionsPanel(){const R=(await getAll("regions",await tdb())).sort
    <p class="muted">Gespeicherte swisstopo-Karten (und gewählte Ebenen) sind auch ohne Netz da. Grenzen pro Region: ${fmtN(LIM_KM2)} km² und ${fmtN(LIM_TILES)} Kacheln.</p>
    <button class="btn pri full" id="rNew"><svg><use href="#i-plus"/></svg>Neue Region auf der Karte wählen</button>
    <div class="card" style="margin-top:10px">${R.length?R.map(r=>{const s=st[r.state]||st.wait;const pct=r.total?Math.round((r.done||0)/r.total*100):0;
-     return `<div class="q"><div class="grow"><b>${esc(r.name)}</b> <small class="${s[1]}">${s[0]}</small><br><small class="muted">${(r.bases||[]).map(k=>BASES[k].n).concat((r.ovs||[]).map(k=>OVERLAYS[k].n)).join(", ")} · bis Zoom ${r.zmax} · ${fmtN(r.done||0)} / ${fmtN(r.total||0)} Kacheln · ${MB(r.bytes||0)}${r.names?` · ${fmtN(r.names)} Namen`:""}${r.fail?` · ${r.fail} fehlten`:""}</small>
+     return `<div class="q"><div class="grow"><b>${esc(r.name)}</b> <small class="${s[1]}">${s[0]}</small><br><small class="muted">${(r.bases||[]).map(k=>BASES[k].n).concat((r.ovs||[]).filter(k=>OVERLAYS[k]).map(k=>OVERLAYS[k].n)).join(", ")} · bis Zoom ${r.zmax} · ${fmtN(r.done||0)} / ${fmtN(r.total||0)} Kacheln · ${MB(r.bytes||0)}${r.names?` · ${fmtN(r.names)} Namen`:""}${r.fail?` · ${r.fail} fehlten`:""}</small>
        ${r.state!=="done"?`<div class="pbar"><i style="width:${pct}%"></i></div>`:""}</div>
       <div class="btns" style="flex-direction:column;gap:4px">${r.state==="run"||r.state==="names"?`<button class="btn sm" data-pause="${r.id}">Anhalten</button>`:r.state!=="done"?`<button class="btn sm pri" data-go="${r.id}">Fortsetzen</button>`:""}
        <button class="btn sm" data-show="${r.id}">Zeigen</button><button class="btn sm red" data-del="${r.id}">Löschen</button></div></div>`;}).join(""):`<div class="muted">Noch keine Regionen gespeichert.</div>`}</div>
@@ -48,7 +48,7 @@ function showFrame(b){hideFrame();frameEl=document.createElement("div");frameEl.
   Object.assign(frameEl.style,{left:a.x+"px",top:a.y+"px",width:(c.x-a.x)+"px",height:(c.y-a.y)+"px"});};frameEl._u=upd;frameEl._b=b;map.on("move",upd);upd();}
 function hideFrame(){if(frameEl){map.off("move",frameEl._u);frameEl.remove();frameEl=null;}frameHandles.forEach(h=>map.removeMarker(h));frameHandles=[];}
 function startRegionSelect(){if(planState)return toast("Zuerst die Planung beenden");storeFree();closePanel();const bb=map.getBounds();const dy=(bb[2]-bb[0])*0.18,dx=(bb[3]-bb[1])*0.15;
-  regionSel={shape:"rect",rb:[bb[0]+dy,bb[1]+dx,bb[2]-dy,bb[3]-dx],poly:[],pmk:[],b:null,bases:["lk"],ovs:Object.keys(viewPrefs().ov||{}).filter(k=>viewPrefs().ov[k]),zmax:17};regionSel.b=regionSel.rb.slice();
+  regionSel={shape:"rect",rb:[bb[0]+dy,bb[1]+dx,bb[2]-dy,bb[3]-dx],poly:[],pmk:[],b:null,bases:["lk"],ovs:Object.keys(viewPrefs().ov||{}).filter(k=>viewPrefs().ov[k]&&OVERLAYS[k]),zmax:17};regionSel.b=regionSel.rb.slice();
   if(map.z<10)toast("Tipp: zuerst näher an das Gebiet zoomen",3500);
   map.on("markerdrag",onHandleDrag);map.on("markerclick",onPolyMkClick);map.addDrawer(drawRegionPoly);setRegionShape("rect");}
 function regionSelR(){const rs=regionSel;return {bbox:rs.b,poly:rs.shape==="poly"?rs.poly:null,bases:rs.bases,ovs:rs.ovs,zmax:rs.zmax};}

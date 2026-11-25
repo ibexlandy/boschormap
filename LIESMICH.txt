@@ -1,4 +1,4 @@
-BoschorMap – v3.3 (privates Projekt)
+BoschorMap – v3.4 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -53,9 +53,16 @@ Inhalt des Ordners
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
 
+NEU IN v3.4
+- Ebene «Alpine Auen ausserhalb Bundesinventar» wieder entfernt (war eingeschaltet → verschwindet ohne Fehler).
+- Kopfbalken zeigt die aktuelle Zoomstufe («Zoom 12») – passend zu «ab Zoom …» bei den Ebenen.
+- Neuer Gipfel: Schalter heisst nur noch «Besucht».
+- Neuen Ort erfassen: kein Höhenfeld mehr (Höhe kommt automatisch von swisstopo); beim Bearbeiten bleibt das Feld. Höhe im Ort-Fenster als «1'998 M.ü.M.».
+- Kategorie «Start / Parkplatz» entfernt; bestehende Orte dieser Kategorie werden zu «Schöner Ort».
+
 NEU IN v3.3
 - Berg-Logo oben links grösser.
-- Neue Ebenen: «Alpweiden mit Herdenschutzhunden» und «Alpine Auen ausserhalb Bundesinventar» (BAFU), auch für Offline-Regionen.
+- Neue Ebene: «Alpweiden mit Herdenschutzhunden» (BAFU), auch für Offline-Regionen.
 
 NEU IN v3.2
 - Besuch ohne Datum: «Früher schon hier – Datum unbekannt» unter den Besuchen (z. B. Hütte von früher). Zählt als Besuch (grüner Haken), steht als «früher» zuunterst, im Gipfelbuch als «zuerst früher».
