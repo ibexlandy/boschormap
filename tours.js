@@ -98,13 +98,13 @@ function toursPanel(){const all=S.tours.filter(t=>!t.del);const years=[...new Se
 
 /* ---------- Tour anzeigen ---------- */
 let profMk=null;function removeProfDot(){if(profMk){map.removeMarker(profMk);profMk=null;}}
-async function showTour(id,replace){const t=S.tours.find(x=>x.id===id);if(!t)return;selTour=id;S._selLine=null;selPoint=null;refreshMarkers();setTourPhotoMarks(t);
+async function showTour(id,replace){rememberOpen("t",id);const t=S.tours.find(x=>x.id===id);if(!t)return;selTour=id;S._selLine=null;selPoint=null;refreshMarkers();setTourPhotoMarks(t);
   const line=await tourLine(id);S._selLine=line?(line.length>3000?simplify(line,1.5):line).map(p=>[p[0],p[1]]):null;map.render();
   const b=t.bbox;const pb=sheetPad();if(b){const s=map.project(b[2],b[1]),e=map.project(b[0],b[3]);if(s.x<0||s.y<0||e.x>map.w-sheetPadR()||e.y>map.h-pb||(e.x-s.x)<map.w*0.15)map.fitBounds(b,40,pb,sheetPadR());}
   const fn=()=>tourPanel(id);if(replace)replacePanel(fn,{half:true});else openPanel(fn,{half:true});}
 function profFromLine(line){const out=[];let d=0;for(let i=0;i<line.length;i++){if(i)d+=distM(line[i-1][0],line[i-1][1],line[i][0],line[i][1]);if(line[i][2]!=null)out.push({d,h:line[i][2],lat:line[i][0],lon:line[i][1]});}
   if(out.length>600){const k=out.length/600;return out.filter((p,i)=>Math.floor(i%k)===0||i===out.length-1);}return out;}
-async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(!t||t.del)return {title:"Tour",html:`<div class="empty">Nicht gefunden</div>`};
+async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(t&&!t.del)rememberOpen("t",id);if(!t||t.del)return {title:"Tour",html:`<div class="empty">Nicht gefunden</div>`};
   const line=await tourLine(id);const prof=t.prof||(line?profFromLine(line):[]);const a=ARTS[t.art]||ARTS.wandern;const idea=t.status==="idee";
   const along=line?S.points.filter(p=>!p.del&&t.bbox&&p.lat>t.bbox[0]-0.002&&p.lat<t.bbox[2]+0.002&&p.lon>t.bbox[1]-0.003&&p.lon<t.bbox[3]+0.003).map(p=>{let bi=0,bd=Infinity;
       for(let i=0;i<line.length;i+=2){const d=distM(p.lat,p.lon,line[i][0],line[i][1]);if(d<bd){bd=d;bi=i;}}return {p,bd,bi};}).filter(x=>x.bd<=100).sort((x,y)=>x.bi-y.bi):[];

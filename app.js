@@ -23,19 +23,20 @@ function openPanel(fn,o){nav.push({fn,o:o||{}});renderPanel();const sh=$("#sheet
   try{if(!(history.state&&history.state.bm))history.pushState({bm:1},"");}catch(e){}}
 function replacePanel(fn,o){if(!nav.length)return openPanel(fn,o);nav[nav.length-1]={fn,o:o||{}};renderPanel();}
 function panelBack(){nav.pop();if(!nav.length)return closePanel();renderPanel();}
-function closePanel(fromPop){nav.length=0;clearTemp();if(S._steep||S._chk){S._steep=null;S._chk=null;map.render();}const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
+function closePanel(fromPop){nav.length=0;ls("openItem",null);clearTemp();if(S._steep||S._chk){S._steep=null;S._chk=null;map.render();}const sh=$("#sheet");sh.classList.remove("open","half");sh.setAttribute("aria-hidden","true");document.body.classList.remove("so");$("#panel").innerHTML="";
   $$("#bar button").forEach(b=>b.classList.remove("on"));
   if(selTour&&!planState){selTour=null;map.render();removeProfDot();}if(selPoint){selPoint=null;refreshMarkers();}}
 window.addEventListener("popstate",()=>{if($(".pbig")){closeGallery();try{history.pushState({bm:1},"");}catch(e){}return;}
   if(!nav.length)return;if(nav.length>1){nav.pop();renderPanel();try{history.pushState({bm:1},"");}catch(e){}}else closePanel(true);});
-async function renderPanel(){const top=nav[nav.length-1];if(!top)return;const P=$("#panel");let r;try{r=await top.fn();}catch(e){console.error(e);r={title:"Fehler",html:`<div class="card">${esc(e.message)}</div>`};}
+async function renderPanel(){const top=nav[nav.length-1];if(!top)return;const P=$("#panel");let r;const keep=top.o.keepScroll?[...$$("input,textarea",P)].filter(e=>e.dataset.ed&&e.id&&e.type!=="file"&&e.type!=="checkbox"&&e.value!==e.defaultValue).map(e=>[e.id,e.value]):[];const fid=top.o.keepScroll&&document.activeElement&&P.contains(document.activeElement)?document.activeElement.id:null;try{r=await top.fn();}catch(e){console.error(e);r={title:"Fehler",html:`<div class="card">${esc(e.message)}</div>`};}
   if(nav[nav.length-1]!==top)return;const half=!!(top.o.half||r.half)&&ls("sheetFull")!=="1";$("#sheet").classList.toggle("half",half);$("#sheet").classList.toggle("canhalf",!!(top.o.half||r.half));
   P.innerHTML=`${top.o.half||r.half?`<button class="grab" aria-label="${half?"Grösser":"Kleiner"}"><i></i></button>`:""}<div class="ph">${nav.length>1?`<button class="ib" data-hdr="back" aria-label="Zurück"><svg><use href="#i-back"/></svg></button>`:""}<h2>${r.icon||""}<span>${esc(r.title||"")}</span></h2>${r.tools||""}<button class="ib" data-hdr="close" aria-label="Schliessen"><svg><use href="#i-close"/></svg></button></div><div class="pb">${r.html||""}</div>${r.foot?`<div class="pfoot">${r.foot}</div>`:""}`;
   P.querySelector('[data-hdr="close"]').onclick=()=>r.onClose?r.onClose():closePanel();const gb=P.querySelector(".grab");
   if(gb){const tog=()=>{const full=$("#sheet").classList.toggle("half")===false;ls("sheetFull",full?"1":"0");gb.setAttribute("aria-label",full?"Kleiner":"Grösser");};gb.onclick=tog;
     let y0=null;gb.addEventListener("pointerdown",e=>{y0=e.clientY;});gb.addEventListener("pointerup",e=>{if(y0==null)return;const dy=e.clientY-y0;y0=null;const isHalf=$("#sheet").classList.contains("half");
       if(dy<-25&&isHalf)tog();else if(dy>25&&!isHalf)tog();});}const bb=P.querySelector('[data-hdr="back"]');if(bb)bb.onclick=panelBack;
-  if(!top.o.keepScroll)P.scrollTop=0;bindStars(P);if(r.after)try{await r.after(P);}catch(e){console.error(e);toast(e.message);}}
+  if(!top.o.keepScroll)P.scrollTop=0;bindStars(P);if(r.after)try{await r.after(P);}catch(e){console.error(e);toast(e.message);}
+  for(const [id,v] of keep){const e=P.querySelector("#"+CSS.escape(id));if(e&&e.value===e.defaultValue){e.value=v;e.dataset.ed="1";}}if(fid){const e=P.querySelector("#"+CSS.escape(fid));if(e)try{e.focus({preventScroll:true});}catch(x){}}}
 function refreshPanel(){if(nav.length){nav[nav.length-1].o.keepScroll=true;renderPanel().then(()=>{if(nav.length)nav[nav.length-1].o.keepScroll=false;});}}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$(".pbig")&&nav.length&&!e.target.closest("input,textarea"))panelBack();});
 
@@ -56,7 +57,7 @@ const artIc=a=>`<span class="ic" style="background:${(ARTS[a]||ARTS.wandern).c}"
 const pointDone=p=>p.cat==="gipfel"&&(p.visits||[]).length>0;
 
 /* ---------- Karte ---------- */
-function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:CH_BOUNDS});
+function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:CH_BOUNDS});map.setHD(v.hd!==false);
   const lv=lsJ("lastview",null);if(lv&&isFinite(lv.lat))map.setView(lv.lat,lv.lon,lv.z);else map.setView(46.75,8.2,8);
   setBase(v.base||"lk");for(const k in OVERLAYS)if(v.ov&&v.ov[k])setOverlay(k,true);
   map.addDrawer(drawTours);map.addDrawer(drawMisc);map.addDrawer(drawSteep);map.addDrawer(drawCheck);map.addDrawer(drawHeat);
@@ -77,11 +78,13 @@ function layersPanel(){const v=viewPrefs();
    <div class="card"><h3>Anzeigen</h3>
     <label class="tg"><span>Gemachte Touren</span><span class="sw2"><input type="checkbox" data-show="showDone"${v.showDone!==false?" checked":""}><i></i></span></label>
     <label class="tg"><span>Tourideen (gestrichelt)</span><span class="sw2"><input type="checkbox" data-show="showIdeas"${v.showIdeas!==false?" checked":""}><i></i></span></label>
-    <label class="tg"><span>Orte und Gipfel</span><span class="sw2"><input type="checkbox" data-show="showPts"${v.showPts!==false?" checked":""}><i></i></span></label></div>
+    <label class="tg"><span>Orte und Gipfel</span><span class="sw2"><input type="checkbox" data-show="showPts"${v.showPts!==false?" checked":""}><i></i></span></label>
+    <label class="tg"><span>Feine Kartendarstellung<br><small class="muted">kleinere, scharfe Schrift wie in der swisstopo-App (braucht etwas mehr Daten)</small></span><span class="sw2"><input type="checkbox" id="lyHD"${v.hd!==false?" checked":""}><i></i></span></label></div>
    <p class="muted small">Karten und Ebenen: © swisstopo, BAFU, ASTRA (geo.admin.ch)</p>`,
    after(P){$$("[data-base]",P).forEach(b=>b.onclick=()=>{setBase(b.dataset.base);refreshPanel();});
      $$("[data-ov]",P).forEach(c=>c.onchange=()=>setOverlay(c.dataset.ov,c.checked));
-     $$("[data-show]",P).forEach(c=>c.onchange=()=>{const v=viewPrefs();v[c.dataset.show]=c.checked;saveViewPrefs(v);refreshMarkers();map.render();});}};}
+     $$("[data-show]",P).forEach(c=>c.onchange=()=>{const v=viewPrefs();v[c.dataset.show]=c.checked;saveViewPrefs(v);refreshMarkers();map.render();});
+     $("#lyHD",P).onchange=e=>{const v=viewPrefs();v.hd=e.target.checked;saveViewPrefs(v);map.setHD(v.hd);};}};}
 
 /* Touren zeichnen: vereinfachte Linie je nach Zoom, Farbe nach Art, Ideen gestrichelt */
 function tourDisp(t){return t.disp||[];}
@@ -105,7 +108,12 @@ function hitTour(x,y){let best=null;for(const t of visibleTours()){const bb=t.bb
     for(let i=1;i<L.length;i++){const p=map.project(L[i][0],L[i][1]);const d=segPx(x,y,prev,p);if(d<14&&(!best||d<best.d))best={t,d};prev=p;}}return best&&best.t;}
 function segPx(x,y,a,b){const vx=b.x-a.x,vy=b.y-a.y,L=vx*vx+vy*vy;let t=L?((x-a.x)*vx+(y-a.y)*vy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(x-a.x-t*vx,y-a.y-t*vy);}
 function onMapClick(e){if(placing)return;if(planState)return planClick(e);if(regionSel){if(regionSel.shape==="poly")polyClick(e);return;}const t=hitTour(e.x,e.y);if(t){showTour(t.id);return;}
-  if(nav.length&&$("#sheet").classList.contains("half"))closePanel();}
+  if(nav.length&&$("#sheet").classList.contains("half")){const a=document.activeElement;
+    if(a&&$("#panel").contains(a)&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)){a.blur();return;}
+    if(panelDirty()){toast("Eingabe noch nicht gespeichert – mit ✕ schliessen");return;}closePanel();}}
+/* Eingabefelder im Fenster, die geändert, aber noch nicht gespeichert sind */
+function panelDirty(){return [...$$("#panel input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),#panel textarea")].some(e=>e.dataset.ed&&e.id&&e.value!==e.defaultValue&&e.id!=="sq"&&e.id!=="pq");}
+document.addEventListener("input",e=>{const t=e.target;if(t&&t.closest&&t.closest("#panel")&&t.dataset)t.dataset.ed="1";},true);
 function onMarkerClick(e){const mk=e.marker;if(regionSel){if(regionSel.shape==="poly"&&!mk.pv)polyClick(e);return;}if(planState&&mk.pid){const p=S.points.find(x=>x.id===mk.pid);if(p)return planClick({lat:p.lat,lon:p.lon,pid:p.id});}
   if(mk.onClick)return mk.onClick(e);if(mk.pid)showPoint(mk.pid);}
 function onLongPress(e){if(planState||placing||regionSel)return;const lat=e.lat,lon=e.lon;setTemp(lat,lon);
@@ -187,10 +195,17 @@ function editPointPanel(p,isNew){return {title:isNew?"Neuer Ort":"Ort bearbeiten
       p.note=$("#fNote",P).value.trim();p.rate={gesamt:starVal(P,"gesamt")};for(const [k] of (CRIT[p.cat]||[]))p.rate[k]=starVal(P,k);
       const vis=$("#fVis",P);if(vis&&vis.checked)p.visits=[{d:today(),note:""}];
       await savePoint(p);toast("Gespeichert");if(isNew){nav.pop();showPoint(p.id,true);}else panelBack();};}};}
-function showPoint(id,replace){const p=S.points.find(x=>x.id===id);if(!p)return;selPoint=id;refreshMarkers();
+async function addPointPhotos(p,fl){let n=0,bad=0;
+  for(const x of fl){progress("Fotos speichern",n,fl.length);try{const id=await storePhoto(x,p.id);p.photos=(p.photos||[]).concat(id);n++;}catch(e){bad++;}}
+  progressDone();if(n)await savePoint(p);toast(bad?`${n} gespeichert, ${bad} nicht lesbar (Format HEIF? In der Samsung-Kamera «Bilder mit hoher Effizienz» ausschalten)`:`${n} Foto${n>1?"s":""} gespeichert`,bad?7000:2500);}
+/* Zuletzt offener Ort / offene Tour merken – Ziel für Fotos, die aus der Galerie per «Teilen» kommen */
+function rememberOpen(k,id){ls("openItem",JSON.stringify({k,id,t:Date.now()}));}
+function recentOpen(){try{const o=JSON.parse(ls("openItem")||"null");if(!o||Date.now()-o.t>3600e3)return null;
+  const it=o.k==="p"?S.points.find(x=>x.id===o.id&&!x.del):S.tours.find(x=>x.id===o.id&&!x.del);return it?{k:o.k,it}:null;}catch(e){return null;}}
+function showPoint(id,replace){rememberOpen("p",id);const p=S.points.find(x=>x.id===id);if(!p)return;selPoint=id;refreshMarkers();
   const fn=()=>pointPanel(id);if(replace&&nav.length)replacePanel(fn,{half:true});else openPanel(fn,{half:true});
   const pp=map.project(p.lat,p.lon);if(pp.x<40||pp.y<40||pp.x>map.w-40-sheetPadR()||pp.y>map.h-sheetPad()-30){const z=Math.max(map.z,13);const S=256*Math.pow(2,z);map.flyTo(BMap.yLat(BMap.latY(p.lat)+sheetPad()/2/S),BMap.xLon(BMap.lonX(p.lon)+sheetPadR()/2/S),z);}}
-async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(!p)return {title:"Ort",html:`<div class="empty">Nicht gefunden</div>`};
+async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(p)rememberOpen("p",id);if(!p)return {title:"Ort",html:`<div class="empty">Nicht gefunden</div>`};
   if(p.hoehe==null&&navigator.onLine){heightAt(p.lat,p.lon).then(h=>{if(h!=null){p.hoehe=h;p.hq="swisstopo";savePoint(p).then(refreshPanel);}});}
   const k=CATS[p.cat]||CATS.ort;const vis=(p.visits||[]).slice().sort((a,b)=>String(b.d).localeCompare(String(a.d)));
   const near=S.tours.filter(t=>!t.del&&t.bbox&&p.lat>t.bbox[0]-0.01&&p.lat<t.bbox[2]+0.01&&p.lon>t.bbox[1]-0.01&&p.lon<t.bbox[3]+0.01&&distLine(p.lat,p.lon,t.disp)<150).slice(0,8);
@@ -204,7 +219,7 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(!p)return {
     ${p.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(p.note)}</p>`:""}</div>
    ${ph.length?`<div class="card"><div class="thumbs" id="pThumbs">${ph.map((x,i)=>`<img data-i="${i}" alt="">`).join("")}</div></div>`:""}
    <div class="card"><h3>Besuche</h3>${vis.length?vis.map(v=>`<div class="visit"><b style="min-width:84px">${fmtDate(v.d)}</b><span class="grow">${esc(v.note||"")}${v.tour?` <a href="#" data-tour="${v.tour}">Tour</a>`:""}</span><button class="ib" data-delv="${esc(v.d)}|${esc(v.note||"")}" aria-label="Besuch löschen" style="width:32px;height:32px"><svg style="width:16px;height:16px"><use href="#i-trash"/></svg></button></div>`).join(""):`<div class="muted">Noch keine Besuche eingetragen.</div>`}
-    <div class="row" style="margin-top:8px"><input type="date" class="inp" id="vD" value="${today()}" style="width:150px"><input class="inp grow" id="vN" placeholder="kurze Notiz"><button class="btn" id="vAdd"><svg><use href="#i-plus"/></svg>Besuch</button></div></div>
+    <div class="row" style="margin-top:8px"><input type="date" class="inp" id="vD" value="${today()}" style="width:150px"><input class="inp grow" id="vN" placeholder="kurze Notiz" enterkeyhint="done"><button class="btn" id="vAdd"><svg><use href="#i-plus"/></svg>Besuch</button></div></div>
    ${near.length?`<div class="card"><h3>Touren hier</h3>${near.map(t=>`<button class="li" data-tour="${t.id}"><span class="sw" style="background:${ARTS[t.art].c}"></span><span class="t"><b>${esc(t.name)}</b><small>${t.status==="idee"?"Idee":fmtDate(t.date)} · ${fmtKm(t.dist)}</small></span></button>`).join("")}</div>`:""}
    <div class="btns"><button class="btn" id="pEd"><svg><use href="#i-edit"/></svg>Bearbeiten</button><button class="btn" id="pPh"><svg><use href="#i-cam"/></svg>Foto</button>
     <button class="btn" id="pPl"><svg><use href="#i-flag"/></svg>Tour planen</button><button class="btn" id="pWx"><svg><use href="#i-sun"/></svg>Wetter & Bulletin</button>
@@ -212,13 +227,12 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(!p)return {
    <p class="muted small">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</p>`,
    async after(P){if(ph.length){const ims=$$("#pThumbs img",P);for(let i=0;i<ph.length;i++){thumbURL(ph[i]).then(u=>{ims[i].src=u;});ims[i].onclick=()=>showGallery(ph,i);}}
      $("#pEd",P).onclick=()=>openPanel(()=>editPointPanel(p,false));
-     $("#pPh",P).onclick=()=>{const f=$("#fPtPhoto");f.onchange=async()=>{const fl=[...f.files];f.value="";if(!fl.length)return;let n=0,bad=0;
-         for(const x of fl){progress("Fotos speichern",n,fl.length);try{const id=await storePhoto(x,p.id);p.photos=(p.photos||[]).concat(id);n++;}catch(e){bad++;}}
-         progressDone();if(n)await savePoint(p);toast(bad?`${n} gespeichert, ${bad} nicht lesbar (Format HEIF? In der Samsung-Kamera «Bilder mit hoher Effizienz» ausschalten)`:`${n} Foto${n>1?"s":""} gespeichert`,bad?7000:2500);refreshPanel();};f.click();};
+     $("#pPh",P).onclick=()=>{const f=$("#fPtPhoto");f.onchange=async()=>{const fl=[...f.files];f.value="";if(!fl.length)return;await addPointPhotos(p,fl);refreshPanel();};f.click();};
      $("#pPl",P).onclick=()=>{closePanel();startPlan({start:[p.lat,p.lon],pid:p.id});};
      $("#pWx",P).onclick=()=>openPanel(()=>conditionsPanel(p.lat,p.lon,p.hoehe,p.name));if($("#pWxTop",P))$("#pWxTop",P).onclick=$("#pWx",P).onclick;
      $("#pDel",P).onclick=async()=>{if(!confirm(`«${p.name}» löschen? (bleibt 30 Tage im Papierkorb)`))return;p.del=Date.now();await savePoint(p);closePanel();toast("Gelöscht – im Papierkorb");};
-     $("#vAdd",P).onclick=async()=>{const d=$("#vD",P).value;if(!d)return;p.visits=(p.visits||[]).concat({d,note:$("#vN",P).value.trim()});await savePoint(p);refreshPanel();};
+     $("#vAdd",P).onclick=async()=>{const d=$("#vD",P).value;if(!d)return toast("Datum wählen");p.visits=(p.visits||[]).concat({d,note:$("#vN",P).value.trim()});$("#vN",P).value="";$("#vN",P).defaultValue="";$("#vD",P).value=$("#vD",P).defaultValue;await savePoint(p);toast("Besuch gespeichert");refreshPanel();};
+     $("#vN",P).onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("#vAdd",P).click();}};
      $$("[data-delv]",P).forEach(b=>b.onclick=async()=>{const [d,n]=b.dataset.delv.split("|");if(!confirm("Besuch vom "+fmtDate(d)+" löschen?"))return;
        const i=p.visits.findIndex(v=>v.d===d&&(v.note||"")===n);if(i>=0)p.visits.splice(i,1);await savePoint(p);refreshPanel();});
      $$("[data-tour]",P).forEach(b=>b.onclick=e=>{e.preventDefault();showTour(b.dataset.tour);});}};}
@@ -432,7 +446,13 @@ async function routeIncoming(files){const gpx=[],img=[],other=[];
     let isG=/\.gpx$/i.test(f.name)||/gpx/.test(f.type);if(!isG){try{isG=/<gpx[\s>]/i.test(await f.slice(0,4000).text());}catch(e){}}
     (isG?gpx:other).push(isG&&!/\.gpx$/i.test(f.name)?new File([f],(f.name.replace(/\.[^.]+$/,"")||"suunto")+".gpx",{type:"application/gpx+xml",lastModified:f.lastModified}):f);}
   if(other.length&&!gpx.length&&!img.length)toast(`«${other[0].name}» ist keine GPX-Datei – in der Suunto-App «GPX-Workout exp.» wählen`,6000);
-  if(gpx.length)await importGPX(gpx);else if(img.length){locateOnce();scanPhotos(img);}}
+  if(gpx.length)await importGPX(gpx);else if(img.length)sharedPhotos(img);}
+function sharedPhotos(img){const ro=recentOpen();if(!ro){locateOnce();return scanPhotos(img);}const {k,it}=ro;const n=img.length;
+  openPanel(()=>({title:`${n} Foto${n>1?"s":""} erhalten`,half:true,html:`<p class="muted" style="margin:0 0 10px">Wohin sollen ${n>1?"die Fotos":"das Foto"}?</p>
+    <div class="btns" style="flex-direction:column;align-items:stretch"><button class="btn pri" id="shTo">${k==="p"?catIc(it.cat):artIc(it.art)} Zu «${esc(it.name||"Ohne Name")}»</button>
+    <button class="btn" id="shAuto"><svg><use href="#i-locate"/></svg>Automatisch nach Standort zuordnen</button></div>`,
+    after(P){$("#shTo",P).onclick=async()=>{closePanel();if(k==="p"){await addPointPhotos(it,img);showPoint(it.id);}else{showTour(it.id);await tourPhotoAssign(it,img);}};
+      $("#shAuto",P).onclick=()=>{closePanel();locateOnce();scanPhotos(img);};}}),{half:true});}
 
 /* ---------- Service-Worker und Update ---------- */
 let swReg=null,reloading=false;

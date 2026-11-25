@@ -1,4 +1,4 @@
-BoschorMap – v2.9 (privates Projekt)
+BoschorMap – v3.0 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,11 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v3.0
+- Eingaben im Fenster (z. B. Besuch/Notiz): Antippen der Karte schliesst nur die Tastatur, nicht das Fenster; mit ungespeicherter Eingabe bleibt das Fenster offen. Getippter Text bleibt erhalten, wenn sich das Fenster im Hintergrund auffrischt (z. B. nach dem automatischen Abgleich). Enter in der Besuchs-Notiz speichert den Besuch.
+- Fotos aus der Samsung-Galerie: dort «Teilen → BoschorMap». War gerade ein Ort oder eine Tour offen (letzte Stunde), fragt die App: «Zu ‹Name›» oder «Automatisch nach Standort zuordnen».
+- Karte: «Feine Kartendarstellung» (Karten und Ebenen, standardmässig an) – auf Handys eine Zoomstufe feinere Kacheln, dadurch kleinere, scharfe Schrift wie in der swisstopo-App.
 
 NEU IN v2.9
 - PC/Browser: Kartenknöpfe bleiben rechts stehen, wenn ein Fenster offen ist; das Fenster öffnet sich links daneben.

@@ -26,7 +26,7 @@ class TileLayer{
   /* Alte Zoomstufen erst entfernen, wenn die aktuellen Kacheln da sind (keine grauen Flächen beim Zoomen) */
   prune(force){const need=this.need;if(!need)return;let all=true;for(const k of need){const t=this.tiles.get(k);if(!t||!t.ok){all=false;break;}}
     for(const [k,t] of this.tiles){if(need.has(k))continue;if(all||force||t.z===this.tz){t.im.onload=t.im.onerror=null;t.im.src="";t.el.remove();this.tiles.delete(k);}}}
-  render(m){const o=this.o;let tz=Math.round(m.z);tz=Math.max(o.min,Math.min(o.max,tz));
+  render(m){const o=this.o;let tz=Math.round(m.z)+(m.hd||0);tz=Math.max(o.min,Math.min(o.max,tz));
     if(m.z<o.min-0.5||(o.hideBelow&&m.z<o.hideBelow)){this.el.style.display="none";return;}this.el.style.display="";
     const n=1<<tz,S=TS*Math.pow(2,m.z),ts=S/n,cx=m.cx*S-m.w/2,cy=m.cy*S-m.h/2;
     const x0=Math.max(0,Math.floor(cx/ts)),x1=Math.min(n-1,Math.floor((cx+m.w)/ts)),y0=Math.max(0,Math.floor(cy/ts)),y1=Math.min(n-1,Math.floor((cy+m.h)/ts));
@@ -45,8 +45,10 @@ class Map_{
     this.pane=document.createElement("div");this.pane.className="bm-pane";el.appendChild(this.pane);
     this.cv=document.createElement("canvas");this.cv.className="bm-cv";el.appendChild(this.cv);
     this.mpane=document.createElement("div");this.mpane.className="bm-mk-pane";el.appendChild(this.mpane);
-    this.layers=[];this.markers=new Set();this.drawers=[];this.ev={};this.cx=0.5;this.cy=0.5;this.z=8;this.w=0;this.h=0;this.raf=0;this.anim=null;
+    this.hd=0;this.layers=[];this.markers=new Set();this.drawers=[];this.ev={};this.cx=0.5;this.cy=0.5;this.z=8;this.w=0;this.h=0;this.raf=0;this.anim=null;
     this.resize();new ResizeObserver(()=>{this.resize();this.clampView();this.render();}).observe(el);this.gestures();}
+  /* Feine Darstellung: auf Bildschirmen mit hoher Pixeldichte eine Zoomstufe feinere Kacheln (Schrift wie in der swisstopo-App) */
+  setHD(on){const v=on&&(window.devicePixelRatio||1)>=1.5?1:0;if(v===this.hd)return;this.hd=v;this.render();}
   on(n,f){(this.ev[n]=this.ev[n]||[]).push(f);return this;}
   off(n,f){this.ev[n]=(this.ev[n]||[]).filter(x=>x!==f);}
   fire(n,d){(this.ev[n]||[]).slice().forEach(f=>{try{f(d);}catch(e){console.error(e);}});}
