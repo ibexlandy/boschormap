@@ -170,3 +170,5 @@ button.q.gb{width:100%;background:none;border:0;text-align:left;font:inherit;col
 #top .ib{width:34px;height:34px;border-radius:8px}#top .ib svg{width:20px;height:20px}
 .lnk{display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:6px 2px;color:var(--nacht);font-size:13.5px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}.lnk svg{width:16px;height:16px}
 .q.off{opacity:.55}
+#top .logo{width:32px;height:32px;margin:-2px -2px -2px -4px}
+#top .logo{width:36px;height:28px;margin:0 2px 0 -2px}

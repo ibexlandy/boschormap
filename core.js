@@ -1,6 +1,6 @@
 /* BoschorMap – Grundlagen: Hilfsfunktionen, Speicher (IndexedDB), Koordinaten, Konstanten */
 "use strict";
-const APP_VERSION="3.2";
+const APP_VERSION="3.3";
 const LSP="bm_";            /* eigenes localStorage-Präfix – getrennt von IbexMap auf derselben Herkunft */
 const DBN="boschormap",TDBN="boschormap-tiles";
 
@@ -75,6 +75,8 @@ const BASES={
 const OVERLAYS={
   hang:{n:"Hangneigung über 30°",ids:["ch.swisstopo.hangneigung-ueber_30"],max:17,op:0.6,kb:6,from:11},
   wild:{n:"Wildruhezonen & Jagdbanngebiete",ids:["ch.bafu.wrz-wildruhezonen_portal","ch.bafu.wrz-jagdbanngebiete_select"],max:18,op:0.7,kb:3,from:9},
+  hsh:{n:"Alpweiden mit Herdenschutzhunden",ids:["ch.bafu.alpweiden-herdenschutzhunde"],max:17,op:0.6,kb:2,from:9},
+  auen:{n:"Alpine Auen ausserhalb Bundesinventar",ids:["ch.bafu.auen-ausserhalb_bundesinventar_alpin"],max:17,op:0.6,kb:2,from:10},
   ski:{n:"Skitourenrouten",ids:["ch.swisstopo-karto.skitouren"],max:17,op:0.9,kb:3,from:11},
   wander:{n:"Wanderwege",ids:["ch.swisstopo.swisstlm3d-wanderwege"],max:18,op:0.9,kb:3,from:11},
   velo:{n:"Velorouten",ids:["ch.astra.veloland"],max:18,op:0.85,kb:2,from:8},

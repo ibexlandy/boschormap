@@ -1,4 +1,4 @@
-BoschorMap – v3.2 (privates Projekt)
+BoschorMap – v3.3 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,10 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v3.3
+- Berg-Logo oben links grösser.
+- Neue Ebenen: «Alpweiden mit Herdenschutzhunden» und «Alpine Auen ausserhalb Bundesinventar» (BAFU), auch für Offline-Regionen.
 
 NEU IN v3.2
 - Besuch ohne Datum: «Früher schon hier – Datum unbekannt» unter den Besuchen (z. B. Hütte von früher). Zählt als Besuch (grüner Haken), steht als «früher» zuunterst, im Gipfelbuch als «zuerst früher».
