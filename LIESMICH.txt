@@ -1,4 +1,4 @@
-BoschorMap – v3.0 (privates Projekt)
+BoschorMap – v3.1 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,11 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v3.1
+- Kopfbalken oben deutlich schmaler (34 statt 52 Punkte) – mehr Platz für die Karte.
+- Karten und Ebenen → Kartendarstellung: Automatisch / Fein / Normal. «Fein» gibt auch am PC eine detailliertere Karte (eine Zoomstufe feiner, kleinere Schrift).
+- Hütten werden in allen Landessprachen erkannt (auch Rifugio, Bivacco, Refuge, Chamanna, Berghaus) – beim langen Druck auf die Karte und in der Suche.
 
 NEU IN v3.0
 - Eingaben im Fenster (z. B. Besuch/Notiz): Antippen der Karte schliesst nur die Tastatur, nicht das Fenster; mit ungespeicherter Eingabe bleibt das Fenster offen. Getippter Text bleibt erhalten, wenn sich das Fenster im Hintergrund auffrischt (z. B. nach dem automatischen Abgleich). Enter in der Besuchs-Notiz speichert den Besuch.

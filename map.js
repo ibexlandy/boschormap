@@ -48,7 +48,7 @@ class Map_{
     this.hd=0;this.layers=[];this.markers=new Set();this.drawers=[];this.ev={};this.cx=0.5;this.cy=0.5;this.z=8;this.w=0;this.h=0;this.raf=0;this.anim=null;
     this.resize();new ResizeObserver(()=>{this.resize();this.clampView();this.render();}).observe(el);this.gestures();}
   /* Feine Darstellung: auf Bildschirmen mit hoher Pixeldichte eine Zoomstufe feinere Kacheln (Schrift wie in der swisstopo-App) */
-  setHD(on){const v=on&&(window.devicePixelRatio||1)>=1.5?1:0;if(v===this.hd)return;this.hd=v;this.render();}
+  setHD(mode){const v=mode==="fein"?1:mode==="normal"?0:(window.devicePixelRatio||1)>=1.5?1:0;if(v===this.hd)return;this.hd=v;this.render();}
   on(n,f){(this.ev[n]=this.ev[n]||[]).push(f);return this;}
   off(n,f){this.ev[n]=(this.ev[n]||[]).filter(x=>x!==f);}
   fire(n,d){(this.ev[n]||[]).slice().forEach(f=>{try{f(d);}catch(e){console.error(e);}});}

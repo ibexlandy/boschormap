@@ -57,7 +57,9 @@ const artIc=a=>`<span class="ic" style="background:${(ARTS[a]||ARTS.wandern).c}"
 const pointDone=p=>p.cat==="gipfel"&&(p.visits||[]).length>0;
 
 /* ---------- Karte ---------- */
-function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:CH_BOUNDS});map.setHD(v.hd!==false);
+/* Kartendarstellung: auto (fein nur bei hoher Pixeldichte), fein, normal – alte Ein/Aus-Einstellung wird übernommen */
+const hdMode=v=>v.hd===false?"normal":v.hd===true||v.hd==null?"auto":v.hd;
+function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,maxZoom:20,bounds:CH_BOUNDS});map.setHD(hdMode(v));
   const lv=lsJ("lastview",null);if(lv&&isFinite(lv.lat))map.setView(lv.lat,lv.lon,lv.z);else map.setView(46.75,8.2,8);
   setBase(v.base||"lk");for(const k in OVERLAYS)if(v.ov&&v.ov[k])setOverlay(k,true);
   map.addDrawer(drawTours);map.addDrawer(drawMisc);map.addDrawer(drawSteep);map.addDrawer(drawCheck);map.addDrawer(drawHeat);
@@ -79,12 +81,14 @@ function layersPanel(){const v=viewPrefs();
     <label class="tg"><span>Gemachte Touren</span><span class="sw2"><input type="checkbox" data-show="showDone"${v.showDone!==false?" checked":""}><i></i></span></label>
     <label class="tg"><span>Tourideen (gestrichelt)</span><span class="sw2"><input type="checkbox" data-show="showIdeas"${v.showIdeas!==false?" checked":""}><i></i></span></label>
     <label class="tg"><span>Orte und Gipfel</span><span class="sw2"><input type="checkbox" data-show="showPts"${v.showPts!==false?" checked":""}><i></i></span></label>
-    <label class="tg"><span>Feine Kartendarstellung<br><small class="muted">kleinere, scharfe Schrift wie in der swisstopo-App (braucht etwas mehr Daten)</small></span><span class="sw2"><input type="checkbox" id="lyHD"${v.hd!==false?" checked":""}><i></i></span></label></div>
+    </div>
+   <div class="card"><h3>Kartendarstellung</h3><div class="lgrid">${[["auto","Automatisch"],["fein","Fein"],["normal","Normal"]].map(([k,n])=>`<button class="lopt${hdMode(v)===k?" on":""}" data-hd="${k}">${n}</button>`).join("")}</div>
+    <p class="muted small" style="margin:8px 0 0">Fein: eine Zoomstufe feinere Karte in halber Grösse – mehr Details, kleinere Schrift (wie swisstopo-App), etwas mehr Daten. Automatisch: fein auf dem Handy, normal am PC.</p></div>
    <p class="muted small">Karten und Ebenen: © swisstopo, BAFU, ASTRA (geo.admin.ch)</p>`,
    after(P){$$("[data-base]",P).forEach(b=>b.onclick=()=>{setBase(b.dataset.base);refreshPanel();});
      $$("[data-ov]",P).forEach(c=>c.onchange=()=>setOverlay(c.dataset.ov,c.checked));
      $$("[data-show]",P).forEach(c=>c.onchange=()=>{const v=viewPrefs();v[c.dataset.show]=c.checked;saveViewPrefs(v);refreshMarkers();map.render();});
-     $("#lyHD",P).onchange=e=>{const v=viewPrefs();v.hd=e.target.checked;saveViewPrefs(v);map.setHD(v.hd);};}};}
+     $$("[data-hd]",P).forEach(b=>b.onclick=()=>{const v=viewPrefs();v.hd=b.dataset.hd;saveViewPrefs(v);map.setHD(v.hd);refreshPanel();});}};}
 
 /* Touren zeichnen: vereinfachte Linie je nach Zoom, Farbe nach Art, Ideen gestrichelt */
 function tourDisp(t){return t.disp||[];}
@@ -132,7 +136,9 @@ function onLongPress(e){if(planState||placing||regionSel)return;const lat=e.lat,
       const h=await heightAt(lat,lon);const el=$("#lpH",P);if(el)el.textContent=h?fmtN(h)+" m ü. M.":"Höhe nur online";}}));}
 const kindTxt=k=>String(k||"").replace(/ue/g,"ü").replace(/oe/g,"ö").replace(/ae/g,"ä").replace(/Ue/g,"Ü");
 /* Namen (swissNAMES3D) an einer Stelle der Karte: online bei swisstopo, offline aus den gespeicherten Regionen */
-function nameCat(kind,name){const k=(kind+" "+name).toLowerCase();return /h(ü|ue)tte|biwak|cabane|capanna|unterkunft/.test(k)?"huette":/gipfel|hügel|huegel|kuppe|horn\b|piz\b/.test(k)?"gipfel":/pass\b|passo|col\b/.test(kind.toLowerCase())?"pass":/\bsee\b|lej\b|lac\b|lago\b/.test(k)||/see$/i.test(kind)?"see":"ort";}
+/* Hütten in allen Landessprachen erkennen */
+const HUT_RE=/h(ü|ue)tte|biwak|cabane|capanna|unterkunft|rifugio|bivacco|refuge|chamanna|berghaus|berggasthaus/;
+function nameCat(kind,name){const k=(kind+" "+name).toLowerCase();return HUT_RE.test(k)?"huette":/gipfel|hügel|huegel|kuppe|horn\b|piz\b/.test(k)?"gipfel":/pass\b|passo|col\b/.test(kind.toLowerCase())?"pass":/\bsee\b|lej\b|lac\b|lago\b/.test(k)||/see$/i.test(kind)?"see":"ort";}
 async function namesAt(lat,lon,x,y){const tolPx=28;const mpp=40075016*Math.cos(lat*RAD)/map.S;const rad=Math.max(25,tolPx*mpp);const out=[];
   if(navigator.onLine){try{const [E,N]=toLV95(lat,lon);const a=map.unproject(0,map.h),b=map.unproject(map.w,0);const [E0,N0]=toLV95(a.lat,a.lon),[E1,N1]=toLV95(b.lat,b.lon);
       const ext=[E0,N0,E1,N1].map(v=>Math.round(v)).join(",");
@@ -331,7 +337,7 @@ function searchPanel(){return {title:"Suchen",icon:`<svg><use href="#i-search"/>
     function bindRes(el){$$("[data-p]",el).forEach(b=>b.onclick=()=>showPoint(b.dataset.p));$$("[data-t]",el).forEach(b=>b.onclick=()=>showTour(b.dataset.t));
       $$("[data-ll]",el).forEach(b=>b.onclick=()=>{const [la,lo]=b.dataset.ll.split(",").map(Number);const fz=Math.max(map.z,14);setTemp(la,lo);
         const nm=b.dataset.nm.replace(/^(Alpiner Gipfel|Gipfel|Hauptgipfel|Huegel|Hügel|Pass|See|Huette|Hütte|Alpine Huette|Ort)\s+/,"").replace(/\s*\([A-Z]{2}\).*$/,"");
-        const kind=(b.dataset.nm+" "+b.dataset.kind).toLowerCase();const cat=/gipfel|huegel|hügel|grat|horn/.test(kind)?"gipfel":/h(ü|ue)tte|biwak/.test(kind)?"huette":/pass/.test(kind)?"pass":/see\b/.test(kind)?"see":"ort";
+        const kind=(b.dataset.nm+" "+b.dataset.kind).toLowerCase();const cat=HUT_RE.test(kind)?"huette":/gipfel|huegel|hügel|grat|horn/.test(kind)?"gipfel":/pass/.test(kind)?"pass":/see\b/.test(kind)?"see":"ort";
         const sub=b.dataset.nm!==nm?b.dataset.nm:(b.dataset.kind||"");
         replacePanel(()=>({title:nm,half:true,html:`${sub?`<p class="muted small" style="margin:0 0 10px">${esc(sub)}</p>`:""}<div class="btn3"><button class="btn pri" id="srP"><svg><use href="#i-pin"/></svg>Speichern</button><button class="btn" id="srR"><svg><use href="#i-flag"/></svg>Planen</button><button class="btn" id="srW"><svg><use href="#i-sun"/></svg>Wetter</button></div>`,
           after(P2){requestAnimationFrame(()=>focusAt(la,lo,fz));$("#srP",P2).title=`Als ${CATS[cat].n} übernehmen`;$("#srP",P2).onclick=()=>{clearTemp();newPoint(la,lo,{name:nm,cat});};$("#srR",P2).onclick=()=>{clearTemp();closePanel();startPlan({end:[la,lo]});};
