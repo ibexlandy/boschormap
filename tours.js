@@ -125,6 +125,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(t&&!t.del)rem
    <div class="card"><h3>Bewertung</h3><div class="crit"><span>Gesamt</span>${starsHTML((t.rate||{}).gesamt,"gesamt")}</div>${TOUR_CRIT.map(([k,n])=>`<div class="crit"><span>${n}</span>${starsHTML((t.rate||{})[k],k)}</div>`).join("")}
     ${t.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(t.note)}</p>`:""}</div>
    ${tourPhotoCard(t,idea)}
+   ${!idea&&t.moving?`<label class="tg card"><span>Für persönliches Tempo verwenden<br><small class="muted">Ausschalten bei Touren, die nicht typisch sind (z. B. mit Kindern, Schlechtwetter, verletzt, Zeit unvollständig).</small></span><span class="sw2"><input type="checkbox" id="tPace"${t.noPace?"":" checked"}><i></i></span></label>`:""}
    ${along.length?`<div class="card"><h3>Am Weg</h3>${along.map(x=>`<button class="li" data-p="${x.p.id}">${catIc(x.p.cat)}<span class="t"><b>${esc(x.p.name)}</b><small>${x.p.hoehe?fmtN(x.p.hoehe)+" m · ":""}${CATS[x.p.cat].n}${(x.p.photos||[]).length?` · ${x.p.photos.length} Fotos`:""}</small></span></button>`).join("")}</div>`:""}
    <div class="btns">
     <button class="btn" id="tEd"><svg><use href="#i-edit"/></svg>Bearbeiten</button>
@@ -139,7 +140,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(t&&!t.del)rem
      if(prof.length>1){const top=prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]);const b=winter?await bulletinAt(top.lat,top.lon):null;const band=b&&b.critLow!=null?[b.critLow,b.critHigh]:null;
        const si=slopeInfo(prof,t.prof?60:100);bindSteep(P,prof,si);bindCheckCard(P,tourCheckKey(t),async()=>({prof,line:(await tourLine(t.id)||[]).map(p=>[p[0],p[1]]),winter:!!ARTS[t.art].ski}));drawProfile($("#tProf",P),prof,{band,slope:si,info:$("#tProfI",P),marks:tourPhotoMarks(t),onMark:i=>openTourPhoto(t,i)});}
      bindTourPhotoCard(P,t);
-     $("#tEd",P).onclick=()=>openPanel(()=>editTourPanel(t));
+     $("#tEd",P).onclick=()=>openPanel(()=>editTourPanel(t));if($("#tPace",P))$("#tPace",P).onchange=async e=>{if(e.target.checked)delete t.noPace;else t.noPace=true;await saveTour(t);toast(e.target.checked?"Zählt wieder fürs persönliche Tempo":"Wird fürs persönliche Tempo nicht mehr berücksichtigt");};
      const re=$("#tRe",P);if(re)re.onclick=()=>{closePanel();startPlan({edit:t.id});};
      const ag=$("#tAgain",P);if(ag)ag.onclick=async()=>{const n={id:uid(),status:"idee",src:"copy",art:t.art,name:t.name,dist:t.dist,up:t.up,down:t.down,emin:t.emin,emax:t.emax,note:t.note,rate:{},diff:t.diff,
          plan:{art:t.art,wps:line?[[line[0][0],line[0][1]],[line[line.length-1][0],line[line.length-1][1]]].map(p=>({lat:p[0],lon:p[1],mode:"luft"})):[]}};
@@ -386,17 +387,20 @@ function bootPlanEvents(){map.on("markerdragstart",e=>{if(e.marker.wp&&planState
 function tempoPanel(){const arts=Object.keys(ARTS);
   return {title:"Persönliches Tempo",icon:`<svg><use href="#i-gauge"/></svg>`,html:`
    <label class="tg card"><span>Gelerntes Tempo für Schätzungen verwenden<br><small class="muted">Aus deinen Touren (Zeit in Bewegung, Distanz, Auf- und Abstieg), pro Sportart.</small></span><span class="sw2"><input type="checkbox" id="tpL"${S.settings.tempoLearn!==false?" checked":""}><i></i></span></label>
-   ${arts.map(a=>{const d=tempoDefault(a),l=learnTempo(S.tours,a),f=(S.settings.tempoFactor||{})[a]||1;const T=S.tours.filter(t=>!t.del&&t.art===a&&t.status==="gemacht"&&t.pace);
+   ${arts.map(a=>{const d=tempoDefault(a),l=learnTempo(S.tours,a),f=(S.settings.tempoFactor||{})[a]||1;const T=S.tours.filter(t=>!t.del&&!t.noPace&&t.art===a&&t.status==="gemacht"&&t.pace);
      return `<div class="card"><h3 style="color:${ARTS[a].c}">${ARTS[a].n}</h3>
       <table style="width:100%;font-size:13px"><tr class="muted"><td></td><td>Ebene</td><td>Aufstieg</td><td>Abstieg</td></tr>
        <tr><td class="muted">Vorgabe</td><td>${fmtN(d.vf,1)} km/h</td><td>${fmtN(d.vu)} Hm/h</td><td>${fmtN(d.vd)} Hm/h</td></tr>
        <tr><td><b>Gelernt</b></td><td><b>${l.n?fmtN(l.t.vf,1)+" km/h":"–"}</b></td><td><b>${l.n?fmtN(l.t.vu)+" Hm/h":"–"}</b></td><td><b>${l.n?fmtN(l.t.vd)+" Hm/h":"–"}</b></td></tr></table>
       <p class="muted small">${l.n?`aus ${l.n} Touren${l.fac?` · insgesamt ${l.fac<1?"schneller":"langsamer"} als die Vorgabe (Faktor ${fmtN(1/l.fac,2)})`:""}`:"noch keine Touren mit Zeit"}${f!==1?` · Regler ${Math.round(f*100)} %`:""}</p>
       ${T.length?`<canvas class="prof" data-tc="${a}" style="height:130px"></canvas><p class="muted small">Punkte: Steigleistung pro Tour (Hm/h in Abschnitten über 8 % Steigung), Linie: Verlauf. Grau: Abstieg.</p>`:""}</div>`;}).join("")}
-   <div class="card"><h3>Vorher geschätzt – tatsächlich</h3>${S.tours.filter(t=>!t.del&&t.status==="gemacht"&&t.moving).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,8).map(t=>{const e=estFor(t);const d=Math.round((t.moving/e-1)*100);
-     return `<div class="q"><span class="grow"><b>${esc(t.name)}</b><br><small class="muted">${fmtDate(t.date)} · ${ARTS[t.art].n}</small></span><span>${fmtDur(e)} → <b>${fmtDur(t.moving)}</b><br><small class="${Math.abs(d)<=10?"st-done":"muted"}">${d>0?"+":""}${d} %</small></span></div>`;}).join("")||`<div class="muted">Noch keine Touren.</div>`}</div>`,
+   <div class="card"><h3>Vorher geschätzt – tatsächlich</h3>${S.tours.filter(t=>!t.del&&t.status==="gemacht"&&t.moving).sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(t=>{const e=estFor(t);const d=Math.round((t.moving/e-1)*100);
+     return `<div class="q${t.noPace?" off":""}"><span class="grow"><b>${esc(t.name)}</b><br><small class="muted">${fmtDate(t.date)} · ${ARTS[t.art].n}${t.noPace?" · <b>nicht gezählt</b>":""}</small></span><span>${fmtDur(e)} → <b>${fmtDur(t.moving)}</b><br><small class="${Math.abs(d)<=10?"st-done":"muted"}">${d>0?"+":""}${d} %</small></span>
+      <span class="sw2" style="margin-left:10px" aria-label="Fürs Tempo zählen"><input type="checkbox" data-np="${t.id}"${t.noPace?"":" checked"}><i></i></span></div>`;}).join("")||`<div class="muted">Noch keine Touren.</div>`}
+    <p class="muted small" style="margin:6px 0 0">Schalter aus = Tour zählt nicht fürs gelernte Tempo.</p></div>`,
    after(P){$("#tpL",P).onchange=async e=>{S.settings.tempoLearn=e.target.checked;await saveSettings();refreshPanel();};
-     $$("[data-tc]",P).forEach(cv=>tempoChart(cv,S.tours.filter(t=>!t.del&&t.art===cv.dataset.tc&&t.status==="gemacht"&&t.pace).sort((a,b)=>String(a.date).localeCompare(String(b.date)))));}};}
+     $$("[data-np]",P).forEach(c=>{c.closest(".sw2").onclick=e=>e.stopPropagation();c.onchange=async()=>{const t=S.tours.find(x=>x.id===c.dataset.np);if(!t)return;if(c.checked)delete t.noPace;else t.noPace=true;await saveTour(t);refreshPanel();};});
+     $$("[data-tc]",P).forEach(cv=>tempoChart(cv,S.tours.filter(t=>!t.del&&!t.noPace&&t.art===cv.dataset.tc&&t.status==="gemacht"&&t.pace).sort((a,b)=>String(a.date).localeCompare(String(b.date)))));}};}
 function tempoChart(cv,T){const dpr=Math.min(2,devicePixelRatio||1),W=cv.clientWidth||300,H=cv.clientHeight||130;cv.width=W*dpr;cv.height=H*dpr;const c=cv.getContext("2d");c.scale(dpr,dpr);
   const pts=T.map(t=>({x:Date.parse(t.date)||0,u:t.pace.vu,d:t.pace.vd})).filter(p=>p.x);if(!pts.length)return;const vals=pts.flatMap(p=>[p.u,p.d]).filter(v=>v);if(!vals.length)return;
   let x0=Math.min(...pts.map(p=>p.x)),x1=Math.max(...pts.map(p=>p.x));if(x1-x0<864e5*20){x0-=864e5*10;x1+=864e5*10;}const ymax=Math.ceil(Math.max(...vals)*1.1/100)*100,L=36,R=6,Tp=8,B=18;

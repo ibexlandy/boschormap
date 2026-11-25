@@ -1,4 +1,4 @@
-BoschorMap – v3.1 (privates Projekt)
+BoschorMap – v3.2 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,11 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v3.2
+- Besuch ohne Datum: «Früher schon hier – Datum unbekannt» unter den Besuchen (z. B. Hütte von früher). Zählt als Besuch (grüner Haken), steht als «früher» zuunterst, im Gipfelbuch als «zuerst früher».
+- Persönliches Tempo: Touren lassen sich ausschliessen – Schalter «Für persönliches Tempo verwenden» in der Tour und Schalter pro Tour in «Persönliches Tempo» (Liste «Vorher geschätzt – tatsächlich» zeigt jetzt alle Touren). Gelöschte Touren zählen nicht mehr mit.
+- Offline-Download deutlich schneller: 12 Kacheln gleichzeitig als laufender Strom (statt 4 in Paketen mit Pausen), Speichern nebenher; Zeitschätzung angepasst.
 
 NEU IN v3.1
 - Kopfbalken oben deutlich schmaler (34 statt 52 Punkte) – mehr Platz für die Karte.

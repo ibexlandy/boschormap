@@ -60,7 +60,7 @@ function tempoDefault(art){return Object.assign({},(ARTS[art]||ARTS.wandern).t);
 function estTime(km,up,down,t){return 3600*(km/t.vf+up/t.vu+down/t.vd);}
 /* Lernen aus eigenen Touren: Ausgleichsrechnung über alle Touren der Sportart, sanft zur Vorgabe hingezogen
    (so bleiben die Werte auch bei wenigen Touren vernünftig) */
-function learnTempo(tours,art){const T=tours.filter(t=>t.art===art&&t.status==="gemacht"&&t.moving>600&&t.dist>500).slice(-25);const d0=tempoDefault(art);
+function learnTempo(tours,art){const T=tours.filter(t=>!t.del&&!t.noPace&&t.art===art&&t.status==="gemacht"&&t.moving>600&&t.dist>500).slice(-25);const d0=tempoDefault(art);
   if(!T.length)return {t:d0,n:0};
   const X=T.map(t=>[t.dist/1000,t.up,t.down]),y=T.map(t=>t.moving/3600);
   const p=[1/d0.vf,1/d0.vu,1/d0.vd];

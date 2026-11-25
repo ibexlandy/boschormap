@@ -1,6 +1,6 @@
 /* BoschorMap – Offline-Regionen (Kacheln in IndexedDB), Ortsnamen, Lawinenbulletin (SLF), Wetter (MeteoSchweiz) */
 "use strict";
-const LIM_KM2=3000,LIM_TILES=150000,WARN_TILES=30000,TPS=20,ZMIN_OFF=8;let stFree=null;
+const LIM_KM2=3000,LIM_TILES=150000,WARN_TILES=30000,TPS=60,ZMIN_OFF=8;let stFree=null;
 function storeFree(){try{navigator.storage.estimate().then(e=>{stFree=e.quota?Math.max(0,e.quota-(e.usage||0))/1048576:null;});}catch(e){}}
 let regionSel=null,dl=null;
 
@@ -99,7 +99,7 @@ function regionFormPanel(){if(!regionSel)return {title:"Region",html:""};const r
        const r={id:uid(),name:$("#rfN",P).value.trim()||`Region ${fmtDate(today())}`,bbox:rs.b.map(v=>+v.toFixed(5)),poly:rs.shape==="poly"?rs.poly.map(q=>[+q[0].toFixed(5),+q[1].toFixed(5)]):undefined,bases:rs.bases,ovs:rs.ovs,zmax:rs.zmax,state:"wait",done:0,bytes:0,created:Date.now()};
        r.total=regionCount(r).n;await put("regions",r,await tdb());endRegionSelect();toast("Download gestartet");pumpQueue();openPanel(regionsPanel);};}};}
 
-/* ---------- Download (massvoll: 4 gleichzeitig, kurze Pausen, Abbruch jederzeit) ---------- */
+/* ---------- Download: 12 Abrufe gleichzeitig als laufender Strom, Speichern blockweise nebenher, Abbruch jederzeit ---------- */
 async function resumeRegion(id){const T=await tdb();const r=await getOne("regions",id,T);if(!r)return;if(!navigator.onLine)return toast("Kein Internet");r.state="wait";await put("regions",r,T);pumpQueue();refreshPanel();}
 async function pumpQueue(){if(dl)return;const T=await tdb();const R=(await getAll("regions",T)).filter(r=>r.state==="wait").sort((a,b)=>a.created-b.created);if(!R.length){updPill();return;}
   const r=R[0];dl={id:r.id,stop:false};r.state="run";await put("regions",r,T);updPill(r);refreshRegionsPanel();
@@ -107,20 +107,25 @@ async function pumpQueue(){if(dl)return;const T=await tdb();const R=(await getAl
     r.state=dl.stop?"paused":"done";}catch(e){console.warn(e);r.state="err";r.errMsg=e.message;toast("Download unterbrochen: "+e.message,5000);}
   await put("regions",r,T);dl=null;refreshRegionsPanel();updPill();if(r.state==="done")toast(`«${r.name}» ist offline verfügbar`,4000);pumpQueue();}
 function refreshRegionsPanel(){if(nav.length&&nav[nav.length-1].fn===regionsPanel)refreshPanel();}
-async function downloadRegion(r,T){const keys=[...regionKeys(r)];r.total=keys.length;let done=0,bytes=0,fail=0,last=Date.now();const b0=r.bytes||0;
-  for(let i=0;i<keys.length&&!dl.stop;i+=20){const batch=keys.slice(i,i+20);
-    const have=await new Promise((res,rej)=>{const tx=T.transaction("tiles");const s=tx.objectStore("tiles");const out=new Map();for(const k of batch){const q=s.get(k.k);q.onsuccess=()=>{if(q.result)out.set(k.k,q.result);};}tx.oncomplete=()=>res(out);tx.onerror=()=>rej(tx.error);});
-    const todo=batch.filter(k=>!have.has(k.k));const got=[];
-    const worker=async()=>{while(todo.length&&!dl.stop){const k=todo.shift();let tries=0;
+const DL_CONC=12,DL_CHUNK=240;
+async function downloadRegion(r,T){const keys=[...regionKeys(r)];r.total=keys.length;let done=0,bytes=0,fail=0,last=0;const b0=r.bytes||0;
+  let wbuf=[],wpend=Promise.resolve();const flush=()=>{if(!wbuf.length)return wpend;const items=wbuf;wbuf=[];wpend=wpend.then(()=>putMany("tiles",items,T));return wpend;};
+  const report=async force=>{if(!force&&Date.now()-last<700)return;last=Date.now();r.done=done;r.bytes=b0+bytes;r.fail=fail;await put("regions",r,T);updPill(r);refreshRegionsPanel();};
+  const haveOf=batch=>new Promise((res,rej)=>{const tx=T.transaction("tiles");const st=tx.objectStore("tiles");const out=new Map();for(const k of batch){const q=st.get(k.k);q.onsuccess=()=>{if(q.result)out.set(k.k,q.result);};}tx.oncomplete=()=>res(out);tx.onerror=()=>rej(tx.error);});
+  let nextHave=keys.length?haveOf(keys.slice(0,DL_CHUNK)):null;
+  for(let i=0;i<keys.length&&!dl.stop;i+=DL_CHUNK){const batch=keys.slice(i,i+DL_CHUNK);const have=await nextHave;
+    nextHave=i+DL_CHUNK<keys.length?haveOf(keys.slice(i+DL_CHUNK,i+2*DL_CHUNK)):null;/* nächsten Block schon prüfen, während dieser lädt */
+    for(const [k,v] of have){if(!v.r.includes(r.id)){v.r=v.r.concat(r.id);wbuf.push(v);}}done+=have.size;
+    const todo=batch.filter(k=>!have.has(k.k));let err=null;
+    const worker=async()=>{while(todo.length&&!dl.stop&&!err){const k=todo.shift();let tries=0;
       for(;;){try{if(!navigator.onLine)throw new Error("offline");const res=await fetch(k.u,{mode:"cors",credentials:"omit",cache:"no-store"});
-          if(res.ok){const b=await res.blob();got.push({k:k.k,b,r:[r.id]});bytes+=b.size;}else fail++;break;}
-        catch(e){if(++tries>=4){dl.stop=true;throw new Error(navigator.onLine?"Netzfehler":"Netz weg");}await sleep(1500*tries);}}
-      await sleep(10);}};
-    await Promise.all([worker(),worker(),worker(),worker()]);
-    const upd=[];for(const [k,v] of have){if(!v.r.includes(r.id)){v.r=v.r.concat(r.id);upd.push(v);}}
-    await putMany("tiles",got.concat(upd),T);done+=batch.length-(todo.length);
-    if(Date.now()-last>700||i+20>=keys.length){last=Date.now();r.done=done;r.bytes=b0+bytes;r.fail=fail;await put("regions",r,T);updPill(r);refreshRegionsPanel();}}
-  r.done=Math.min(done,r.total);r.bytes=b0+bytes;r.fail=fail;}
+          if(res.ok){const b=await res.blob();wbuf.push({k:k.k,b,r:[r.id]});bytes+=b.size;}else fail++;done++;break;}
+        catch(e){if(++tries>=4){err=new Error(navigator.onLine?"Netzfehler":"Netz weg");return;}await sleep(1500*tries);}}
+      if(wbuf.length>=120)flush();report(false);}};
+    await Promise.all(Array.from({length:DL_CONC},worker));
+    if(err){dl.stop=true;await flush();await report(true);throw err;}
+    await flush();}
+  await wpend;r.done=Math.min(done,r.total);r.bytes=b0+bytes;r.fail=fail;}
 function updPill(r){const p=$("#dlpill");if(!r||!dl){p.hidden=true;return;}p.hidden=false;p.textContent=r.state==="names"?`Offline: Namen für «${r.name}» …`:`Offline: ${r.name} ${fmtN(r.done||0)} / ${fmtN(r.total||0)}`;p.onclick=()=>openPanel(regionsPanel);}
 async function deleteRegion(r){const T=await tdb();progress("Region löschen",0,0,r.name);
   await new Promise((res,rej)=>{const tx=T.transaction(["tiles","names"],"readwrite");for(const st of ["tiles","names"]){const c=tx.objectStore(st).openCursor();

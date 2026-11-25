@@ -224,8 +224,8 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(p)rememberO
     ${(CRIT[p.cat]||[]).filter(([c])=>(p.rate||{})[c]).map(([c,n])=>`<div class="crit"><span class="muted">${n}</span>${starsHTML(p.rate[c],"",1)}</div>`).join("")}
     ${p.note?`<p style="white-space:pre-wrap;margin:8px 0 0">${esc(p.note)}</p>`:""}</div>
    ${ph.length?`<div class="card"><div class="thumbs" id="pThumbs">${ph.map((x,i)=>`<img data-i="${i}" alt="">`).join("")}</div></div>`:""}
-   <div class="card"><h3>Besuche</h3>${vis.length?vis.map(v=>`<div class="visit"><b style="min-width:84px">${fmtDate(v.d)}</b><span class="grow">${esc(v.note||"")}${v.tour?` <a href="#" data-tour="${v.tour}">Tour</a>`:""}</span><button class="ib" data-delv="${esc(v.d)}|${esc(v.note||"")}" aria-label="Besuch löschen" style="width:32px;height:32px"><svg style="width:16px;height:16px"><use href="#i-trash"/></svg></button></div>`).join(""):`<div class="muted">Noch keine Besuche eingetragen.</div>`}
-    <div class="row" style="margin-top:8px"><input type="date" class="inp" id="vD" value="${today()}" style="width:150px"><input class="inp grow" id="vN" placeholder="kurze Notiz" enterkeyhint="done"><button class="btn" id="vAdd"><svg><use href="#i-plus"/></svg>Besuch</button></div></div>
+   <div class="card"><h3>Besuche</h3>${vis.length?vis.map(v=>`<div class="visit"><b style="min-width:84px"${v.d?"":' class="muted" title="Datum unbekannt"'}>${fmtVisit(v.d)}</b><span class="grow">${esc(v.note||"")}${v.tour?` <a href="#" data-tour="${v.tour}">Tour</a>`:""}</span><button class="ib" data-delv="${esc(v.d)}|${esc(v.note||"")}" aria-label="Besuch löschen" style="width:32px;height:32px"><svg style="width:16px;height:16px"><use href="#i-trash"/></svg></button></div>`).join(""):`<div class="muted">Noch keine Besuche eingetragen.</div>`}
+    <div class="row" style="margin-top:8px"><input type="date" class="inp" id="vD" value="${today()}" style="width:150px"><input class="inp grow" id="vN" placeholder="kurze Notiz" enterkeyhint="done"><button class="btn" id="vAdd"><svg><use href="#i-plus"/></svg>Besuch</button></div>${vis.some(v=>!v.d)?"":`<button class="lnk" id="vOld" style="margin-top:6px"><svg><use href="#i-clock"/></svg>Früher schon hier – Datum unbekannt</button>`}</div>
    ${near.length?`<div class="card"><h3>Touren hier</h3>${near.map(t=>`<button class="li" data-tour="${t.id}"><span class="sw" style="background:${ARTS[t.art].c}"></span><span class="t"><b>${esc(t.name)}</b><small>${t.status==="idee"?"Idee":fmtDate(t.date)} · ${fmtKm(t.dist)}</small></span></button>`).join("")}</div>`:""}
    <div class="btns"><button class="btn" id="pEd"><svg><use href="#i-edit"/></svg>Bearbeiten</button><button class="btn" id="pPh"><svg><use href="#i-cam"/></svg>Foto</button>
     <button class="btn" id="pPl"><svg><use href="#i-flag"/></svg>Tour planen</button><button class="btn" id="pWx"><svg><use href="#i-sun"/></svg>Wetter & Bulletin</button>
@@ -238,8 +238,9 @@ async function pointPanel(id){const p=S.points.find(x=>x.id===id);if(p)rememberO
      $("#pWx",P).onclick=()=>openPanel(()=>conditionsPanel(p.lat,p.lon,p.hoehe,p.name));if($("#pWxTop",P))$("#pWxTop",P).onclick=$("#pWx",P).onclick;
      $("#pDel",P).onclick=async()=>{if(!confirm(`«${p.name}» löschen? (bleibt 30 Tage im Papierkorb)`))return;p.del=Date.now();await savePoint(p);closePanel();toast("Gelöscht – im Papierkorb");};
      $("#vAdd",P).onclick=async()=>{const d=$("#vD",P).value;if(!d)return toast("Datum wählen");p.visits=(p.visits||[]).concat({d,note:$("#vN",P).value.trim()});$("#vN",P).value="";$("#vN",P).defaultValue="";$("#vD",P).value=$("#vD",P).defaultValue;await savePoint(p);toast("Besuch gespeichert");refreshPanel();};
+     if($("#vOld",P))$("#vOld",P).onclick=async()=>{p.visits=(p.visits||[]).concat({d:"",note:$("#vN",P).value.trim()});$("#vN",P).value="";$("#vN",P).defaultValue="";await savePoint(p);toast("Früherer Besuch gespeichert");refreshPanel();};
      $("#vN",P).onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("#vAdd",P).click();}};
-     $$("[data-delv]",P).forEach(b=>b.onclick=async()=>{const [d,n]=b.dataset.delv.split("|");if(!confirm("Besuch vom "+fmtDate(d)+" löschen?"))return;
+     $$("[data-delv]",P).forEach(b=>b.onclick=async()=>{const [d,n]=b.dataset.delv.split("|");if(!confirm(d?"Besuch vom "+fmtDate(d)+" löschen?":"Früheren Besuch (ohne Datum) löschen?"))return;
        const i=p.visits.findIndex(v=>v.d===d&&(v.note||"")===n);if(i>=0)p.visits.splice(i,1);await savePoint(p);refreshPanel();});
      $$("[data-tour]",P).forEach(b=>b.onclick=e=>{e.preventDefault();showTour(b.dataset.tour);});}};}
 
@@ -256,7 +257,7 @@ function pointsPanel(){const pts=S.points.filter(p=>!p.del);
    <div class="chips"><button class="chip${!ptFilter.cat?" on":""}" data-cat="">Alle</button>${Object.entries(CATS).map(([k,v])=>`<button class="chip${ptFilter.cat===k?" on":""}" data-cat="${k}">${v.n}</button>`).join("")}</div>
    ${ptFilter.cat==="gipfel"?`<div class="chips"><button class="chip${!ptFilter.state?" on":""}" data-st="">Alle Gipfel</button><button class="chip${ptFilter.state==="oben"?" on":""}" data-st="oben">Schon oben</button><button class="chip${ptFilter.state==="offen"?" on":""}" data-st="offen">Noch offen</button></div>`:""}
    <div class="row" style="margin-bottom:8px"><input class="inp grow" id="pq" placeholder="Filtern …" value="${esc(ptFilter.q)}"><select class="inp" id="psort" style="width:auto">${[["name","Name"],["hoehe","Höhe"],["rate","Bewertung"],["nah","Nähe Karte"],["besuch","Letzter Besuch"]].map(([k,n])=>`<option value="${k}"${ptFilter.sort===k?" selected":""}>${n}</option>`).join("")}</select></div>
-   <div id="plist">${L.slice(0,400).map(p=>`<button class="li" data-id="${p.id}">${catIc(p.cat)}<span class="t"><b>${esc(p.name||CATS[p.cat].n)}</b><small>${p.hoehe!=null?fmtN(p.hoehe)+" m · ":""}${p.cat==="gipfel"?(pointDone(p)?`oben ${(p.visits||[]).length}× · zuletzt ${fmtDate(lastV(p))}`:"noch offen"):CATS[p.cat].n}</small></span>${(p.rate||{}).gesamt?starsHTML(p.rate.gesamt,"",1):""}</button>`).join("")||`<div class="empty">Keine Orte. Mit dem roten Knopf auf der Karte oder lange drücken einen Ort setzen.</div>`}</div>`,
+   <div id="plist">${L.slice(0,400).map(p=>`<button class="li" data-id="${p.id}">${catIc(p.cat)}<span class="t"><b>${esc(p.name||CATS[p.cat].n)}</b><small>${p.hoehe!=null?fmtN(p.hoehe)+" m · ":""}${p.cat==="gipfel"?(pointDone(p)?`oben ${(p.visits||[]).length}× · zuletzt ${fmtVisit(lastV(p))}`:"noch offen"):CATS[p.cat].n}</small></span>${(p.rate||{}).gesamt?starsHTML(p.rate.gesamt,"",1):""}</button>`).join("")||`<div class="empty">Keine Orte. Mit dem roten Knopf auf der Karte oder lange drücken einen Ort setzen.</div>`}</div>`,
    after(P){$$("[data-cat]",P).forEach(b=>b.onclick=()=>{ptFilter.cat=b.dataset.cat;ptFilter.state="";refreshPanel();});
      $$("[data-st]",P).forEach(b=>b.onclick=()=>{ptFilter.state=b.dataset.st;refreshPanel();});
      $("#psort",P).onchange=e=>{ptFilter.sort=e.target.value;refreshPanel();};
@@ -319,7 +320,7 @@ function searchPanel(){return {title:"Suchen",icon:`<svg><use href="#i-search"/>
       const nq=normS(s);const hit=x=>x&&normS(x).includes(nq);
       const snip=(x,src)=>{const n=normS(x),i=n.indexOf(nq);if(i<0)return "";const a=Math.max(0,i-30),e=Math.min(x.length,i+nq.length+40);
         return `<span class="snip">${src}: ${a?"…":""}${esc(x.slice(a,i))}<mark>${esc(x.slice(i,i+nq.length))}</mark>${esc(x.slice(i+nq.length,e))}${e<x.length?"…":""}</span>`;};
-      const own=[];for(const p of S.points){if(p.del)continue;let sn="";if(hit(p.name))sn=" ";else if(hit(p.note))sn=snip(p.note,"Beschreibung");else{const v=(p.visits||[]).find(v=>hit(v.note));if(v)sn=snip(v.note,"Gipfelbuch "+fmtDate(v.d));}
+      const own=[];for(const p of S.points){if(p.del)continue;let sn="";if(hit(p.name))sn=" ";else if(hit(p.note))sn=snip(p.note,"Beschreibung");else{const v=(p.visits||[]).find(v=>hit(v.note));if(v)sn=snip(v.note,"Gipfelbuch "+fmtVisit(v.d));}
         if(sn)own.push([p,sn]);if(own.length>=25)break;}
       const tr=[];for(const t of S.tours){if(t.del)continue;let sn="";if(hit(t.name))sn=" ";else if(hit(t.note))sn=snip(t.note,"Notiz");if(sn)tr.push([t,sn]);if(tr.length>=15)break;}
       const co=parseCoord(s);
@@ -477,7 +478,7 @@ function drawHeat(c,m){if(!S.heat)return;const b=m.getBounds();const z=m.zoom;c.
 
 /* ---------- Gipfelbuch: bestiegene Gipfel mit Datum, Höhe, Jahren ---------- */
 function gipfelbuchPanel(){const g=S.points.filter(p=>!p.del&&p.cat==="gipfel"&&(p.visits||[]).length);
-  const rows=g.map(p=>{const v=(p.visits||[]).map(x=>x.d).filter(Boolean).sort();return {p,first:v[0]||"",last:v[v.length-1]||"",n:v.length};}).sort((a,b)=>b.last.localeCompare(a.last));
+  const rows=g.map(p=>{const all=p.visits||[],v=all.map(x=>x.d).filter(Boolean).sort();return {p,first:all.some(x=>!x.d)?"":v[0]||"",last:v[v.length-1]||"",n:all.length};}).sort((a,b)=>b.last.localeCompare(a.last));
   const years={};for(const r of rows)for(const v of r.p.visits||[]){const y=String(v.d||"").slice(0,4);if(!y)continue;(years[y]=years[y]||new Set()).add(r.p.id);}
   const hm={};for(const t of S.tours)if(!t.del&&t.status==="gemacht"&&t.date){const y=t.date.slice(0,4);hm[y]=(hm[y]||0)+(t.up||0);}
   const ys=[...new Set([...Object.keys(years),...Object.keys(hm)])].sort().reverse();const top=g.slice().sort((a,b)=>(b.hoehe||0)-(a.hoehe||0))[0];
@@ -486,6 +487,6 @@ function gipfelbuchPanel(){const g=S.points.filter(p=>!p.del&&p.cat==="gipfel"&&
    <div class="kv kv4"><div><b>${g.length}</b><small>Gipfel</small></div><div><b>${rows.reduce((a,r)=>a+r.n,0)}</b><small>Besteigungen</small></div><div><b>${top&&top.hoehe?fmtN(top.hoehe):"–"}</b><small>höchster (m)</small></div><div><b>${offen}</b><small>noch offen</small></div></div>
    ${ys.length?`<div class="card" style="margin-top:10px"><h3>Pro Jahr</h3><table class="tbl"><tr><th>Jahr</th><th>Gipfel</th><th>Höhenmeter</th></tr>${ys.map(y=>`<tr><td><b>${y}</b></td><td>${years[y]?years[y].size:0}</td><td>${fmtN(Math.round(hm[y]||0))}</td></tr>`).join("")}</table></div>`:""}
    <div class="card"><h3>Bestiegene Gipfel</h3>${rows.length?rows.map(r=>`<button class="q gb" data-gb="${r.p.id}"><span class="grow"><b>${esc(r.p.name||"Gipfel")}</b>${r.p.hoehe?` <small class="muted">${fmtN(r.p.hoehe)} m</small>`:""}<br>
-      <small class="muted">${r.n>1?`${r.n}× · zuerst ${fmtDate(r.first)} · zuletzt ${fmtDate(r.last)}`:fmtDate(r.last)}</small></span><svg class="chev"><use href="#i-back"/></svg></button>`).join("")
+      <small class="muted">${r.n>1?`${r.n}× · zuerst ${fmtVisit(r.first)} · zuletzt ${fmtVisit(r.last)}`:r.last?fmtDate(r.last):"früher, Datum unbekannt"}</small></span><svg class="chev"><use href="#i-back"/></svg></button>`).join("")
       :`<div class="muted">Noch keine Gipfel als besucht markiert. Beim GPX-Import schlägt die App Gipfel am Track vor; oder bei einem Gipfel «Besuch hinzufügen».</div>`}</div>`,
    after(P){$$("[data-gb]",P).forEach(b=>b.onclick=()=>showPoint(b.dataset.gb));}};}

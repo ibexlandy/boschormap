@@ -1,6 +1,6 @@
 /* BoschorMap – Grundlagen: Hilfsfunktionen, Speicher (IndexedDB), Koordinaten, Konstanten */
 "use strict";
-const APP_VERSION="3.1";
+const APP_VERSION="3.2";
 const LSP="bm_";            /* eigenes localStorage-Präfix – getrennt von IbexMap auf derselben Herkunft */
 const DBN="boschormap",TDBN="boschormap-tiles";
 
@@ -14,6 +14,8 @@ const fmtN=(n,d=0)=>{if(n==null||!isFinite(n))return "–";const s=Number(n).toF
 const fmtKm=m=>m==null?"–":(m>=10000?fmtN(m/1000,1):fmtN(m/1000,2))+" km";
 const fmtHm=m=>m==null?"–":fmtN(m)+" m";
 const fmtDur=s=>{if(s==null||!isFinite(s))return "–";s=Math.round(s/60);const h=Math.floor(s/60),m=s%60;return h?`${h} h ${String(m).padStart(2,"0")}`:`${m} min`;};
+/* Besuchsdatum: leer = früherer Besuch ohne bekanntes Datum */
+const fmtVisit=d=>d?fmtDate(d):"früher";
 const fmtDate=d=>{if(!d)return "";const m=String(d).match(/^(\d{4})-(\d\d)-(\d\d)/);return m?`${+m[3]}.${+m[2]}.${m[1]}`:String(d);};
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
 const fmtDT=t=>{const d=new Date(t);return `${d.getDate()}.${d.getMonth()+1}.${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;};
