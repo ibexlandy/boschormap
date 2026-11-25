@@ -58,20 +58,21 @@ function paceStats(p){let su=0,st=0,du=0,dt2=0,fd=0,ft=0;
 /* ---------- Tempo-Modell: Zeit = km/vf + Aufstieg/vu + Abstieg/vd ---------- */
 function tempoDefault(art){return Object.assign({},(ARTS[art]||ARTS.wandern).t);}
 function estTime(km,up,down,t){return 3600*(km/t.vf+up/t.vu+down/t.vd);}
-/* Lernen aus eigenen Touren: Ausgleichsrechnung über alle Touren der Sportart, sanft zur Vorgabe hingezogen
-   (so bleiben die Werte auch bei wenigen Touren vernünftig) */
+/* Lernen aus eigenen Touren: Einzelwerte direkt aus den gemessenen Abschnitten der Tracks (Median über die Touren,
+   bei wenigen Touren sanft zur Vorgabe gezogen). Danach nur ein gemeinsamer Korrekturfaktor (0.8–1.25), damit die
+   Gesamtzeit zu den echten Touren passt – so bleiben Ebene/Aufstieg/Abstieg einzeln realistisch. */
 function learnTempo(tours,art){const T=tours.filter(t=>!t.del&&!t.noPace&&t.art===art&&t.status==="gemacht"&&t.moving>600&&t.dist>500).slice(-25);const d0=tempoDefault(art);
   if(!T.length)return {t:d0,n:0};
-  const X=T.map(t=>[t.dist/1000,t.up,t.down]),y=T.map(t=>t.moving/3600);
-  const p=[1/d0.vf,1/d0.vu,1/d0.vd];
-  /* Vorfaktor: wie viel schneller/langsamer als die Vorgabe (Median) */
-  const fs=T.map((t,i)=>y[i]/(X[i][0]*p[0]+X[i][1]*p[1]+X[i][2]*p[2])).filter(isFinite).sort((a,b)=>a-b);const fac=fs[Math.floor(fs.length/2)]||1;
-  const pr=p.map(v=>v*fac);
-  const A=[[0,0,0],[0,0,0],[0,0,0]],b=[0,0,0];for(let i=0;i<X.length;i++)for(let r=0;r<3;r++){b[r]+=X[i][r]*y[i];for(let c=0;c<3;c++)A[r][c]+=X[i][r]*X[i][c];}
-  const med=k=>{const v=X.map(x=>x[k]).sort((a,c)=>a-c);return Math.max(1e-6,v[Math.floor(v.length/2)]);};
-  const lam=2;for(let k=0;k<3;k++){const w=lam*med(k)*med(k);A[k][k]+=w;b[k]+=w*pr[k];}
-  const s=solve3(A,b)||pr;const r=s.map((v,k)=>Math.max(pr[k]*0.4,Math.min(pr[k]*2.5,v)));
-  return {t:{vf:Math.round(10/r[0])/10,vu:Math.round(1/r[1]),vd:Math.round(1/r[2])},n:T.length,fac};}
+  const est0=t=>estTime(t.dist/1000,t.up,t.down,d0);
+  const fs=T.map(t=>t.moving/est0(t)).filter(isFinite).sort((a,b)=>a-b);const fac=fs[Math.floor(fs.length/2)]||1;
+  const med=a=>{a=a.filter(v=>v!=null&&isFinite(v)&&v>0).sort((x,y)=>x-y);return a.length?{v:a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2,n:a.length}:null;};
+  /* Messwert mit Vorgabe×Gesamtfaktor mischen: je mehr Touren, desto mehr zählt der Messwert */
+  const mix=(m,def)=>m?(m.n*m.v+2*def)/(m.n+2):def;
+  const P=T.map(t=>t.pace||{});
+  let t={vf:mix(med(P.map(p=>p.vf)),d0.vf/fac),vu:mix(med(P.map(p=>p.vu)),d0.vu/fac),vd:mix(med(P.map(p=>p.vd)),d0.vd/fac)};
+  const ks=T.map(x=>x.moving/estTime(x.dist/1000,x.up,x.down,t)).filter(isFinite).sort((a,b)=>a-b);let k=ks[Math.floor(ks.length/2)]||1;k=Math.max(0.8,Math.min(1.25,k));
+  t={vf:Math.round(t.vf/k*10)/10,vu:Math.round(t.vu/k),vd:Math.round(t.vd/k)};
+  return {t,n:T.length,fac,k};}
 function solve3(A,b){const m=A.map((r,i)=>[...r,b[i]]);for(let i=0;i<3;i++){let mx=i;for(let k=i+1;k<3;k++)if(Math.abs(m[k][i])>Math.abs(m[mx][i]))mx=k;[m[i],m[mx]]=[m[mx],m[i]];
     if(Math.abs(m[i][i])<1e-12)return null;for(let k=0;k<3;k++){if(k===i)continue;const f=m[k][i]/m[i][i];for(let c=i;c<4;c++)m[k][c]-=f*m[i][c];}}return m.map((r,i)=>r[3]/r[i]);}
 
