@@ -299,6 +299,16 @@ async function smnNow(abbr){const a=abbr.toLowerCase();let href=`${SMN}/${a}/ogd
   const lastN=k=>{for(let i=rows.length-1;i>=0;i--){const v=num(rows[i],k);if(v!=null)return v;}return null;};
   const li=rows.indexOf(last);let rr=0,any=false;for(let i=Math.max(0,li-5);i<=li;i++){const v=num(rows[i],"rre150z0");if(v!=null){rr+=v;any=true;}}
   return {t,ta:num(last,"tre200s0"),rh:num(last,"ure200s0"),ff:num(last,"fu3010z0"),fx:num(last,"fu3010z1"),dd:num(last,"dkl010z0"),rr:any?Math.round(rr*10)/10:null,hs:lastN("htoauts0"),sun:num(last,"sre000z0")};}
+/* Beim Aktualisieren: Messwerte der nächsten Stationen aller Orte, Touren und Zuhause mitspeichern (für offline) */
+async function fetchNowAll(){const m=await smnStations();if(!m)return 0;const need=new Map();
+  const add=(lat,lon,h)=>{if(lat==null)return;for(const s of pickStations(m.s,lat,lon,h).slice(0,3))need.set(s.a,s);};
+  for(const p of S.points)if(!p.del)add(p.lat,p.lon,p.hoehe);
+  for(const t of S.tours)if(!t.del&&t.bbox)add((t.bbox[0]+t.bbox[2])/2,(t.bbox[1]+t.bbox[3])/2,t.emax);
+  if(S.settings.home)add(S.settings.home.lat,S.settings.home.lon,null);
+  const L=[...need.values()];if(!L.length)return 0;const cache=await nowCached();let i=0,done=0;
+  const w=async()=>{while(i<L.length){const s=L[i++];try{cache[s.a]=Object.assign(await smnNow(s.a),{fetched:Date.now()});}catch(e){if(!cache[s.a])cache[s.a]={none:1,fetched:Date.now()};}
+    progress("Messwerte laden",++done,L.length,`${L.length} Stationen · MeteoSchweiz`);}};
+  await Promise.all(Array.from({length:8},w));await metaSet("smnnow",cache);ls("nowT",Date.now());return L.length;}
 async function nowCached(){return (await metaGet("smnnow",null))||{};}
 async function fetchNowFor(sts){const cache=await nowCached();let ok=0;
   /* der Reihe nach, bis drei Stationen brauchbare Werte haben (spart Abfragen) */
@@ -318,11 +328,12 @@ function nowHTML(sts,cache,loading){if(!sts)return `<div class="card"><h3><svg><
 /* ---------- Bulletin und Wetter zusammen holen ---------- */
 async function fetchConditions(){let ok=0;progress("Lawinenbulletin laden",0,0,"SLF");try{await fetchBulletin();ok++;}catch(e){toast("Bulletin: "+e.message,4000);}
   try{await fetchWeather(s=>progress("Wetter laden",0,0,"MeteoSchweiz: "+s));ok++;}catch(e){toast("Wetter: "+e.message,4000);}
-  try{await fetchHourlyAll();}catch(e){toast("Tagesverlauf: "+e.message,4000);}progressDone();if(ok===2)toast("Bulletin und Wetter gespeichert");ls("condT",Date.now());}
+  try{await fetchHourlyAll();}catch(e){toast("Tagesverlauf: "+e.message,4000);}
+  try{await fetchNowAll();}catch(e){toast("Messwerte: "+e.message,4000);}progressDone();if(ok===2)toast("Bulletin und Wetter gespeichert");ls("condT",Date.now());}
 async function condCenterPanel(){const s=await metaGet("slf",null),w=await metaGet("wx",null);const auto=ls("autocond")!=="0";
   return {title:"Lawinenbulletin & Wetter",icon:`<svg><use href="#i-snow"/></svg>`,html:`
-   <div class="card"><h3>Gespeicherter Stand</h3><div class="q"><span class="grow">Lawinenbulletin (SLF)</span><b>${s?fmtDT(s.t):"–"}</b></div><div class="q"><span class="grow">Wetterprognose (MeteoSchweiz)</span><b>${w?fmtDT(w.t):"–"}</b></div>
-    <p class="muted small">Ganze Schweiz rund 3 MB, dazu der Tagesverlauf (4 Tage) für deine Orte und Touren. Danach für jeden Ort, jede Tour und «Ideen» ohne Netz verfügbar.</p>
+   <div class="card"><h3>Gespeicherter Stand</h3><div class="q"><span class="grow">Lawinenbulletin (SLF)</span><b>${s?fmtDT(s.t):"–"}</b></div><div class="q"><span class="grow">Wetterprognose (MeteoSchweiz)</span><b>${w?fmtDT(w.t):"–"}</b></div><div class="q"><span class="grow">Tagesverlauf 4 Tage</span><b>${ls("condT")?fmtDT(+ls("condT")):"–"}</b></div><div class="q"><span class="grow">Messwerte der Stationen</span><b>${ls("nowT")?fmtDT(+ls("nowT")):"–"}</b></div>
+    <p class="muted small">Ganze Schweiz rund 3 MB, dazu für deine Orte, Touren und Zuhause der Tagesverlauf (4 Tage, stündlich) und die Messwerte der nächsten Stationen. Danach alles ohne Netz verfügbar.</p>
     <button class="btn pri full" id="ccGo"><svg><use href="#i-down"/></svg>Jetzt aktualisieren</button></div>
    <label class="tg card"><span>Beim Öffnen automatisch aktualisieren<br><small class="muted">mit Netz, wenn der Stand älter als 6 Stunden ist</small></span><span class="sw2"><input type="checkbox" id="ccA"${auto?" checked":""}><i></i></span></label>
    <div class="btns"><button class="btn" id="ccHere"><svg><use href="#i-pin"/></svg>Für die Kartenmitte anzeigen</button></div>`,
