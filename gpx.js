@@ -57,7 +57,7 @@ function paceStats(p){let su=0,st=0,du=0,dt2=0,fd=0,ft=0;
 
 /* ---------- Tempo-Modell: Zeit = km/vf + Aufstieg/vu + Abstieg/vd ---------- */
 function tempoDefault(art){return Object.assign({},(ARTS[art]||ARTS.wandern).t);}
-function estTime(km,up,down,t){return 3600*(km/t.vf+up/t.vu+down/t.vd);}
+function estTime(km,up,down,t){return 3600*(km/t.vf+up/t.vu+down/t.vd)*(t.k||1);}
 /* Lernen aus eigenen Touren: Einzelwerte direkt aus den gemessenen Abschnitten der Tracks (Median über die Touren,
    bei wenigen Touren sanft zur Vorgabe gezogen). Danach nur ein gemeinsamer Korrekturfaktor (0.8–1.25), damit die
    Gesamtzeit zu den echten Touren passt – so bleiben Ebene/Aufstieg/Abstieg einzeln realistisch. */
@@ -71,7 +71,8 @@ function learnTempo(tours,art){const T=tours.filter(t=>!t.del&&!t.noPace&&t.art=
   const P=T.map(t=>t.pace||{});
   let t={vf:mix(med(P.map(p=>p.vf)),d0.vf/fac),vu:mix(med(P.map(p=>p.vu)),d0.vu/fac),vd:mix(med(P.map(p=>p.vd)),d0.vd/fac)};
   const ks=T.map(x=>x.moving/estTime(x.dist/1000,x.up,x.down,t)).filter(isFinite).sort((a,b)=>a-b);let k=ks[Math.floor(ks.length/2)]||1;k=Math.max(0.8,Math.min(1.25,k));
-  t={vf:Math.round(t.vf/k*10)/10,vu:Math.round(t.vu/k),vd:Math.round(t.vd/k)};
+  /* angezeigte Werte = gemessene (wie im Diagramm); k nur als gemeinsamer Zeit-Abgleich in der Schätzung */
+  t={vf:Math.round(t.vf*10)/10,vu:Math.round(t.vu),vd:Math.round(t.vd),k:+k.toFixed(3)};
   return {t,n:T.length,fac,k};}
 function solve3(A,b){const m=A.map((r,i)=>[...r,b[i]]);for(let i=0;i<3;i++){let mx=i;for(let k=i+1;k<3;k++)if(Math.abs(m[k][i])>Math.abs(m[mx][i]))mx=k;[m[i],m[mx]]=[m[mx],m[i]];
     if(Math.abs(m[i][i])<1e-12)return null;for(let k=0;k<3;k++){if(k===i)continue;const f=m[k][i]/m[i][i];for(let c=i;c<4;c++)m[k][c]-=f*m[i][c];}}return m.map((r,i)=>r[3]/r[i]);}

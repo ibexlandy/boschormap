@@ -8,7 +8,7 @@ async function saveTour(t,line,raw){t.mod=Date.now();if(!t.created)t.created=t.m
   await put("tours",t);const i=S.tours.findIndex(x=>x.id===t.id);if(i<0)S.tours.push(t);else S.tours[i]=t;markDirty();map.render();return t;}
 async function tourLine(id){const r=await getOne("lines",id);return r?r.line:null;}
 function tempoFor(art){const base=S.settings.tempoLearn!==false?learnTempo(S.tours,art).t:tempoDefault(art);const f=(S.settings.tempoFactor||{})[art]||1;
-  return {vf:base.vf*f,vu:base.vu*f,vd:base.vd*f};}
+  return {vf:base.vf*f,vu:base.vu*f,vd:base.vd*f,k:base.k||1};}
 const estFor=t=>estTime((t.dist||0)/1000,t.up||0,t.down||0,tempoFor(t.art));
 const artOpts=sel=>Object.entries(ARTS).map(([k,a])=>`<option value="${k}"${k===sel?" selected":""}>${a.n}</option>`).join("");
 
@@ -392,8 +392,10 @@ function tempoPanel(){const arts=Object.keys(ARTS);
       <table style="width:100%;font-size:13px"><tr class="muted"><td></td><td>Ebene</td><td>Aufstieg</td><td>Abstieg</td></tr>
        <tr><td class="muted">Vorgabe</td><td>${fmtN(d.vf,1)} km/h</td><td>${fmtN(d.vu)} Hm/h</td><td>${fmtN(d.vd)} Hm/h</td></tr>
        <tr><td><b>Gelernt</b></td><td><b>${l.n?fmtN(l.t.vf,1)+" km/h":"–"}</b></td><td><b>${l.n?fmtN(l.t.vu)+" Hm/h":"–"}</b></td><td><b>${l.n?fmtN(l.t.vd)+" Hm/h":"–"}</b></td></tr></table>
-      <p class="muted small">${l.n?`aus ${l.n} ${l.n===1?"Tour":"Touren"}${l.fac?` · insgesamt ${l.fac<1?"schneller":"langsamer"} als die Vorgabe (Faktor ${fmtN(1/l.fac,2)})`:""}`:"noch keine Touren mit Zeit"}${f!==1?` · Regler ${Math.round(f*100)} %`:""}</p>
-      ${T.length?`<canvas class="prof" data-tc="${a}" style="height:130px"></canvas><p class="muted small">Punkte: Steigleistung pro Tour (Hm/h in Abschnitten über 8 % Steigung), Linie: Verlauf. Grau: Abstieg.</p>`:""}</div>`;}).join("")}
+      <p class="muted small">${l.n?`Typische Werte aus ${l.n} ${l.n===1?"Tour":"Touren"}${l.n<4?" (noch etwas zur Vorgabe gezogen)":""}.${l.k&&Math.abs(l.k-1)>=0.03?` Für die Zeitschätzung ${l.k<1?"ziehe":"rechne"} ich ${Math.abs(Math.round((l.k-1)*100))} % ${l.k<1?"ab":"dazu"}, damit sie zu deinen echten Gesamtzeiten passt.`:""}`:"Noch keine Touren mit Zeit."}${f!==1?` · Regler ${Math.round(f*100)} %`:""}</p>
+      ${T.length?`<h4 class="tch">Steigleistung pro Tour</h4><div class="tlg"><span><i style="background:#1f3a52"></i>Aufstieg</span><span><i style="background:#9aa4ad"></i>Abstieg</span><span><i class="dash"></i>gelernt</span></div>
+       <canvas class="prof" data-tc="${a}" style="height:150px"></canvas><div class="tci muted small" data-tci="${a}">Punkt antippen für Details</div>
+       <p class="muted small">Jeder Punkt ist eine Tour: so viele Höhenmeter pro Stunde hast du in den steilen Abschnitten (über 8 % Steigung) geschafft. <b>Höher = schneller.</b> Die durchgezogene Linie zeigt den Trend.</p>`:""}</div>`;}).join("")}
    <div class="card"><h3>Vorher geschätzt – tatsächlich</h3>${S.tours.filter(t=>!t.del&&t.status==="gemacht"&&t.moving).sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(t=>{const e=estFor(t);const d=Math.round((t.moving/e-1)*100);
      return `<div class="q${t.noPace?" off":""}"><span class="grow"><b>${esc(t.name)}</b><br><small class="muted">${fmtDate(t.date)} · ${ARTS[t.art].n}${t.noPace?" · <b>nicht gezählt</b>":""}</small></span><span>${fmtDur(e)} → <b>${fmtDur(t.moving)}</b><br><small class="${Math.abs(d)<=10?"st-done":"muted"}">${d>0?"+":""}${d} %</small></span>
       <span class="sw2" style="margin-left:10px" aria-label="Fürs Tempo zählen"><input type="checkbox" data-np="${t.id}"${t.noPace?"":" checked"}><i></i></span></div>`;}).join("")||`<div class="muted">Noch keine Touren.</div>`}
@@ -401,15 +403,27 @@ function tempoPanel(){const arts=Object.keys(ARTS);
    after(P){$("#tpL",P).onchange=async e=>{S.settings.tempoLearn=e.target.checked;await saveSettings();refreshPanel();};
      $$("[data-np]",P).forEach(c=>{c.closest(".sw2").onclick=e=>e.stopPropagation();c.onchange=async()=>{const t=S.tours.find(x=>x.id===c.dataset.np);if(!t)return;if(c.checked)delete t.noPace;else t.noPace=true;await saveTour(t);refreshPanel();};});
      $$("[data-tc]",P).forEach(cv=>tempoChart(cv,S.tours.filter(t=>!t.del&&!t.noPace&&t.art===cv.dataset.tc&&t.status==="gemacht"&&t.pace).sort((a,b)=>String(a.date).localeCompare(String(b.date)))));}};}
-function tempoChart(cv,T){const dpr=Math.min(2,devicePixelRatio||1),W=cv.clientWidth||300,H=cv.clientHeight||130;cv.width=W*dpr;cv.height=H*dpr;const c=cv.getContext("2d");c.scale(dpr,dpr);
-  const pts=T.map(t=>({x:Date.parse(t.date)||0,u:t.pace.vu,d:t.pace.vd})).filter(p=>p.x);if(!pts.length)return;const vals=pts.flatMap(p=>[p.u,p.d]).filter(v=>v);if(!vals.length)return;
-  let x0=Math.min(...pts.map(p=>p.x)),x1=Math.max(...pts.map(p=>p.x));if(x1-x0<864e5*20){x0-=864e5*10;x1+=864e5*10;}const ymax=Math.ceil(Math.max(...vals)*1.1/100)*100,L=36,R=6,Tp=8,B=18;
-  const X=x=>L+(W-L-R)*(x-x0)/(x1-x0),Y=v=>Tp+(H-Tp-B)*(1-v/ymax);c.font="10px system-ui";c.fillStyle="#62707d";c.strokeStyle="#dde3e8";
-  for(let v=0;v<=ymax;v+=ymax>1200?500:200){c.beginPath();c.moveTo(L,Y(v));c.lineTo(W-R,Y(v));c.stroke();c.fillText(fmtN(v),2,Y(v)+3);}
-  const yr=new Date(x0).getFullYear(),yr1=new Date(x1).getFullYear();for(let y=yr;y<=yr1;y++){const t=new Date(y,0,1).getTime();if(t>=x0&&t<=x1){c.fillText(String(y),X(t)+2,H-5);c.beginPath();c.moveTo(X(t),Tp);c.lineTo(X(t),H-B);c.stroke();}}
+function tempoChart(cv,T){const dpr=Math.min(2,devicePixelRatio||1),W=cv.clientWidth||300,H=cv.clientHeight||150;cv.width=W*dpr;cv.height=H*dpr;const c=cv.getContext("2d");c.scale(dpr,dpr);
+  const pts=T.map(t=>({x:Date.parse(t.date)||0,u:t.pace.vu,d:t.pace.vd,t})).filter(p=>p.x);if(!pts.length)return;const vals=pts.flatMap(p=>[p.u,p.d]).filter(v=>v);if(!vals.length)return;
+  const lt=learnTempo(S.tours,cv.dataset.tc).t;
+  let x0=Math.min(...pts.map(p=>p.x)),x1=Math.max(...pts.map(p=>p.x));if(x1-x0<864e5*20){x0-=864e5*10;x1+=864e5*10;}const ymax=Math.ceil(Math.max(...vals,lt.vu||0,lt.vd||0)*1.1/200)*200,L=44,R=8,Tp=8,B=20;
+  const X=x=>L+(W-L-R)*(x-x0)/(x1-x0),Y=v=>Tp+(H-Tp-B)*(1-v/ymax);c.font="10px system-ui";c.fillStyle="#62707d";c.strokeStyle="#e3e8ec";c.lineWidth=1;
+  const st=ymax>1600?500:ymax>800?200:100;for(let v=0;v<=ymax;v+=st){c.beginPath();c.moveTo(L,Y(v));c.lineTo(W-R,Y(v));c.stroke();c.fillText(fmtN(v),2,Y(v)+3);}
+  c.save();c.translate(10,Tp+(H-Tp-B)/2+12);c.rotate(-Math.PI/2);c.fillText("",0,0);c.restore();c.fillText("Hm/h",2,H-5);
+  /* Monate (bzw. Jahre bei langer Zeitspanne) */
+  const MN=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];const span=(x1-x0)/864e5;const d=new Date(x0);d.setDate(1);d.setHours(0,0,0,0);
+  const stepM=span>900?12:span>400?3:span>150?2:1;let lastX=-99;while(d.getTime()<=x1){const t=d.getTime();if(t>=x0){const x=X(t);if(x-lastX>34){const lab=d.getMonth()===0||stepM===12?String(d.getFullYear()):MN[d.getMonth()];c.fillStyle="#62707d";c.fillText(lab,x+2,H-5);lastX=x;}c.beginPath();c.moveTo(x,Tp);c.lineTo(x,H-B);c.strokeStyle=d.getMonth()===0?"#c9d2da":"#eef1f4";c.stroke();}d.setMonth(d.getMonth()+stepM);}
+  /* gelernte Werte gestrichelt */
+  const dash=(v,col)=>{if(!v)return;c.save();c.setLineDash([5,4]);c.strokeStyle=col;c.lineWidth=1.5;c.beginPath();c.moveTo(L,Y(v));c.lineTo(W-R,Y(v));c.stroke();c.restore();};
+  dash(lt.vd,"#9aa4ad");dash(lt.vu,"#1f3a52");
   const ser=(k,col)=>{const p=pts.filter(q=>q[k]);c.fillStyle=col;for(const q of p){c.beginPath();c.arc(X(q.x),Y(q[k]),3.5,0,7);c.fill();}
     if(p.length>2){c.beginPath();p.forEach((q,i)=>{const w=p.slice(Math.max(0,i-2),i+3).map(z=>z[k]).sort((a,b)=>a-b);const m=w[Math.floor(w.length/2)];i?c.lineTo(X(q.x),Y(m)):c.moveTo(X(q.x),Y(m));});c.strokeStyle=col;c.lineWidth=2;c.stroke();}};
-  ser("d","#9aa4ad");ser("u","#1f3a52");}
+  ser("d","#9aa4ad");ser("u","#1f3a52");
+  /* Punkt antippen: Tour, Datum, Werte */
+  cv.onclick=e=>{const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=18;
+    for(const q of pts)for(const k of ["u","d"])if(q[k]){const dd=Math.hypot(X(q.x)-mx,Y(q[k])-my);if(dd<bd){bd=dd;best=q;}}
+    const box=cv.parentNode.querySelector(`[data-tci="${cv.dataset.tc}"]`);if(!box)return;
+    box.innerHTML=best?`<b>${esc(best.t.name)}</b> · ${fmtDate(best.t.date)} · Aufstieg ${best.u?fmtN(best.u)+" Hm/h":"–"} · Abstieg ${best.d?fmtN(best.d)+" Hm/h":"–"}`:"Punkt antippen für Details";};}
 
 /* ---------- Ideen: passende Tourideen in der Nähe (z. B. fürs Wochenende) ---------- */
 let wf=null;

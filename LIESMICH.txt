@@ -1,4 +1,4 @@
-BoschorMap – v3.6 (privates Projekt)
+BoschorMap – v4.0 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,12 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v4.0
+- Gipfelbuch «Pro Jahr»: neue Spalte «Touren», Höhenmeter klar als «alle Touren» beschriftet (Aufstieg aus den GPS-Tracks, auch ohne Gipfel).
+- Persönliches Tempo verständlicher: «Gelernt» = typische Werte aus deinen Tracks (gleich wie im Diagramm); Zeit-Abgleich als Prozent erklärt. Diagramm mit Titel, Legende, Monaten, Einheit Hm/h, gestrichelt dem gelernten Wert; Punkt antippen zeigt Tour und Werte.
+- Zuhause: lange auf die Karte drücken → «Als Zuhause». Eigenes blaues Haus-Symbol, antippen: Tour von hier planen, Wetter, entfernen. Mehr → Zuhause springt hin. Wird mit Google Drive abgeglichen.
+- Langer Druck: rote Nadel lässt sich ziehen und schwebt dabei über dem Finger – Stelle genau setzen; Koordinaten, Höhe und Namen werden danach neu geholt. Beim Ziehen von Punkten allgemein springt der Punkt nicht mehr unter den Finger.
 
 NEU IN v3.6
 - Persönliches Tempo: Ebene/Aufstieg/Abstieg werden direkt aus den gemessenen Abschnitten der Tracks gelernt (Median), statt die Gesamtzeit rechnerisch aufzuteilen – realistische Einzelwerte, Gesamtzeit weiterhin abgeglichen. «aus 1 Tour».

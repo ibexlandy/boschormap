@@ -67,6 +67,7 @@ function initMap(){const v=viewPrefs();map=new BMap.Map($("#map"),{minZoom:7,max
   const zInd=()=>{const e=$("#zInd");if(e)e.textContent="Zoom "+Math.round(map.z);};zInd();
   map.on("move",()=>{$("#map").classList.toggle("zl",map.z>=13);zInd();});
   map.on("click",onMapClick);map.on("markerclick",onMarkerClick);map.on("longpress",onLongPress);
+  map.on("markerdragend",e=>{if(e.marker===tempMk&&tempMk.drag)onLongPress({lat:e.lat,lon:e.lon},true);});
   $("#bZin").onclick=()=>map.zoomAnim(Math.round(map.z)+1);$("#bZout").onclick=()=>map.zoomAnim(Math.round(map.z)-1);
   $("#bLayers").onclick=()=>openPanel(layersPanel);$("#bLoc").onclick=toggleLocate;$("#bCam").onclick=tripCam;$("#bAdd").onclick=startPlace;}
 function setBase(k){const b=BASES[k]||BASES.lk;if(baseLayer)map.removeLayer(baseLayer);
@@ -119,14 +120,14 @@ function onMapClick(e){if(placing)return;if(planState)return planClick(e);if(reg
 /* Eingabefelder im Fenster, die geändert, aber noch nicht gespeichert sind */
 function panelDirty(){return [...$$("#panel input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),#panel textarea")].some(e=>e.dataset.ed&&e.id&&e.value!==e.defaultValue&&e.id!=="sq"&&e.id!=="pq");}
 document.addEventListener("input",e=>{const t=e.target;if(t&&t.closest&&t.closest("#panel")&&t.dataset)t.dataset.ed="1";},true);
-function onMarkerClick(e){const mk=e.marker;if(regionSel){if(regionSel.shape==="poly"&&!mk.pv)polyClick(e);return;}if(planState&&mk.pid){const p=S.points.find(x=>x.id===mk.pid);if(p)return planClick({lat:p.lat,lon:p.lon,pid:p.id});}
+function onMarkerClick(e){const mk=e.marker;if(mk&&mk.home&&!regionSel&&!planState){openPanel(homePanel,{half:true});return;}if(regionSel){if(regionSel.shape==="poly"&&!mk.pv)polyClick(e);return;}if(planState&&mk.pid){const p=S.points.find(x=>x.id===mk.pid);if(p)return planClick({lat:p.lat,lon:p.lon,pid:p.id});}
   if(mk.onClick)return mk.onClick(e);if(mk.pid)showPoint(mk.pid);}
-function onLongPress(e){if(planState||placing||regionSel)return;const lat=e.lat,lon=e.lon;setTemp(lat,lon);
-  openPanel(async()=>({title:"Ort auf der Karte",half:true,html:`<div class="card"><div class="muted">${lat.toFixed(5)}, ${lon.toFixed(5)} · <span id="lpH">Höhe …</span></div></div>
+function onLongPress(e,again){if(planState||placing||regionSel)return;const lat=e.lat,lon=e.lon;setTemp(lat,lon,true);
+  (again?replacePanel:openPanel)(async()=>({title:"Ort auf der Karte",half:true,html:`<div class="card"><div class="muted">${lat.toFixed(5)}, ${lon.toFixed(5)} · <span id="lpH">Höhe …</span></div><div class="muted small" style="margin-top:4px">Rote Nadel ziehen, um die Stelle genau zu setzen</div></div>
     <div class="btns"><button class="btn pri" id="lpP"><svg><use href="#i-pin"/></svg>Punkt hier setzen</button><button class="btn" id="lpR"><svg><use href="#i-flag"/></svg>Tour von hier planen</button>
-    <button class="btn" id="lpW"><svg><use href="#i-sun"/></svg>Wetter & Bulletin</button></div>
+    <button class="btn" id="lpW"><svg><use href="#i-sun"/></svg>Wetter & Bulletin</button><button class="btn" id="lpHome"><svg><use href="#i-home"/></svg>${S.settings.home?"Zuhause hierher":"Als Zuhause"}</button></div>
     <div class="card" style="margin-top:10px"><h3>Auf der Karte</h3><div id="lpN" class="muted">Namen werden gesucht …</div></div>`,
-    async after(P){$("#lpP",P).onclick=()=>{clearTemp();newPoint(lat,lon);};
+    async after(P){$("#lpP",P).onclick=()=>{clearTemp();newPoint(lat,lon);};$("#lpHome",P).onclick=()=>setHome(lat,lon);
       namesAt(lat,lon,e.x,e.y).then(L=>{const el=$("#lpN",P);if(!el||!P.contains(el))return;
         if(!L.length){el.innerHTML=navigator.onLine?"Kein Name in der Nähe dieser Stelle.":"Ohne Netz nur in gespeicherten Offline-Regionen.";return;}
         el.innerHTML=L.map((n,i)=>{const own=S.points.find(p=>!p.del&&distM(p.lat,p.lon,n.lat,n.lon)<60);
@@ -150,7 +151,7 @@ async function namesAt(lat,lon,x,y){const tolPx=28;const mpp=40075016*Math.cos(l
   if(!out.length){const L=await searchOfflineNames("");for(const n of (namesCache||[]))if(distM(lat,lon,n.lat,n.lon)<rad*1.5)out.push({name:n.name,kind:n.kind,lat:n.lat,lon:n.lon});}
   const seen=new Set();return out.map(n=>Object.assign(n,{cat:nameCat(n.kind,n.name),d:distM(lat,lon,n.lat,n.lon)})).filter(n=>{const k=n.name+"|"+n.kind;if(seen.has(k))return false;seen.add(k);return true;})
     .sort((a,b)=>(a.area-b.area)||a.d-b.d).slice(0,6);}
-function setTemp(lat,lon){clearTemp();tempMk=map.addMarker({lat,lon,cls:"tmp",anchor:[18,46],html:`<svg viewBox="0 0 36 48"><ellipse class="tsh" cx="18" cy="46" rx="6" ry="2"/><path d="M18 45C18 45 3 28 3 17a15 15 0 0 1 30 0c0 11-15 28-15 28z" fill="#c8102e" stroke="#7d0a1c" stroke-width="1.5"/><circle cx="18" cy="17" r="5.5" fill="#fff"/></svg>`,z:50});}
+function setTemp(lat,lon,drag){clearTemp();tempMk=map.addMarker({lat,lon,cls:"tmp",anchor:[18,46],drag:!!drag,html:`<svg viewBox="0 0 36 48"><ellipse class="tsh" cx="18" cy="46" rx="6" ry="2"/><path d="M18 45C18 45 3 28 3 17a15 15 0 0 1 30 0c0 11-15 28-15 28z" fill="#c8102e" stroke="#7d0a1c" stroke-width="1.5"/><circle cx="18" cy="17" r="5.5" fill="#fff"/></svg>`,z:50});if(drag)tempMk.lift=56;}
 /* Punkt so anfliegen, dass er mitten im sichtbaren Kartenteil liegt (nicht unter dem Fenster) */
 function sheetCover(){const sh=$("#sheet");if(innerWidth>=900||!sh||!sh.classList.contains("open"))return 0;const p=$("#panel");return p?Math.min(p.offsetHeight,$("#mapWrap").clientHeight*0.8):0;}
 function focusAt(lat,lon,z){z=z??map.z;const S=256*Math.pow(2,z);map.flyTo(BMap.yLat(BMap.latY(lat)+sheetCover()/2/S),BMap.xLon(BMap.lonX(lon)+sheetPadR()/2/S),z);}
@@ -159,7 +160,19 @@ function clearTemp(){if(tempMk){map.removeMarker(tempMk);tempMk=null;}}
 /* ---------- Punkte auf der Karte ---------- */
 function markerHTML(p){const k=CATS[p.cat]||CATS.ort;const st=(p.visits||[]).length?" done":p.cat==="gipfel"?" open":"";
   return `<div class="mk ${p.cat}${st}${selPoint===p.id?" sel":""}" style="background:${catBg(k)};--c:${k.c}">${catSvg(p.cat)}</div>${p.name||p.hoehe?`<div class="mkl" style="--c:${k.c}">${esc(p.name||"")}${p.hoehe?`<b>${fmtN(p.hoehe)}</b>`:""}</div>`:""}`;}
-function refreshMarkers(){const v=viewPrefs();for(const m of markers.values())map.removeMarker(m);markers.clear();if(v.showPts===false)return;
+/* ---------- Zuhause: eigener Punkt (in den Einstellungen, wird mit Drive abgeglichen) ---------- */
+let homeMk=null;
+function drawHome(){if(homeMk){map.removeMarker(homeMk);homeMk=null;}const h=S.settings.home;if(!h)return;
+  homeMk=map.addMarker({lat:h.lat,lon:h.lon,anchor:[17,17],z:45,cls:"homemk",html:`<div class="hm"><svg><use href="#i-home"/></svg></div>`});homeMk.home=true;}
+async function setHome(lat,lon){const had=!!S.settings.home;S.settings.home={lat:+lat.toFixed(6),lon:+lon.toFixed(6)};await saveSettings();clearTemp();closePanel();drawHome();toast(had?"Zuhause verschoben":"Zuhause gesetzt");}
+function homePanel(){const h=S.settings.home;if(!h)return {title:"Zuhause",html:`<div class="card muted">Noch kein Zuhause gesetzt. Lange auf die Karte drücken und «Als Zuhause» wählen.</div>`};
+  return {title:"Zuhause",icon:`<span class="ic" style="background:#24507a"><svg><use href="#i-home"/></svg></span>`,half:true,html:`<div class="card muted">${h.lat.toFixed(5)}, ${h.lon.toFixed(5)}</div>
+    <div class="btns"><button class="btn" id="hoR"><svg><use href="#i-flag"/></svg>Tour von hier planen</button><button class="btn" id="hoW"><svg><use href="#i-sun"/></svg>Wetter</button></div>
+    <p class="muted small" style="margin:10px 2px">Verschieben: lange an die neue Stelle drücken → «Zuhause hierher».</p>
+    <div class="btns"><button class="btn red" id="hoX"><svg><use href="#i-trash"/></svg>Zuhause entfernen</button></div>`,
+    after(P){$("#hoR",P).onclick=()=>{closePanel();startPlan({start:[h.lat,h.lon]});};$("#hoW",P).onclick=()=>openPanel(()=>conditionsPanel(h.lat,h.lon,null,"Zuhause",{noBul:true}));
+      $("#hoX",P).onclick=async()=>{if(!confirm("Zuhause entfernen?"))return;delete S.settings.home;await saveSettings();drawHome();closePanel();toast("Zuhause entfernt");};}};}
+function refreshMarkers(){drawHome();const v=viewPrefs();for(const m of markers.values())map.removeMarker(m);markers.clear();if(v.showPts===false)return;
   for(const p of S.points){if(p.del)continue;const m=map.addMarker({lat:p.lat,lon:p.lon,anchor:[15,15],html:markerHTML(p),z:p.cat==="gipfel"?3:2});m.pid=p.id;markers.set(p.id,m);}}
 
 /* ---------- Standort (ohne Aufzeichnung) ---------- */
@@ -367,6 +380,7 @@ function morePanel(){const it=(id,ic,t,s)=>`<button class="li" data-m="${id}"><s
    ${it("cond","i-snow","Lawinenbulletin & Wetter","Für unterwegs speichern (SLF, MeteoSchweiz)")}
    ${it("check","i-check","Checklisten","Pro Sportart, zum Abhaken")}
    <h4 class="mgrp">Rückblick</h4>
+   ${it("home","i-home","Zuhause",S.settings.home?"Zur Karte springen":"Noch nicht gesetzt")}
    ${it("book","i-book","Gipfelbuch","Alle bestiegenen Gipfel, Jahre, Höhenmeter")}
    ${it("heat","i-heat",S.heat?"Heatmap ausblenden":"Heatmap zeigen","Wo du überall unterwegs warst")}
    ${it("tempo","i-gauge","Persönliches Tempo","Aus deinen Touren gelernt, pro Sportart")}
@@ -378,6 +392,7 @@ function morePanel(){const it=(id,ic,t,s)=>`<button class="li" data-m="${id}"><s
    ${it("info","i-info","Quellen und Hinweise","swisstopo, SLF, MeteoSchweiz, BRouter")}`,
    after(P){$$("[data-m]",P).forEach(b=>b.onclick=()=>{const m=b.dataset.m;
      if(m==="gpx")$("#fGpx").click();else if(m==="photos")openPanel(photoImportStart);else if(m==="tcam")tripCam();else if(m==="regions")openPanel(regionsPanel);else if(m==="cond")openPanel(condCenterPanel);
+     else if(m==="home"){const h=S.settings.home;if(!h){closePanel();toast("Lange auf die Karte drücken und «Als Zuhause» wählen",4500);return;}closePanel();map.flyTo(h.lat,h.lon,Math.max(map.z,14));setTimeout(()=>openPanel(homePanel,{half:true}),500);}
      else if(m==="book")openPanel(gipfelbuchPanel);else if(m==="heat"){S.heat=!S.heat;ls("heat",S.heat?"1":"");closePanel();map.render();toast(S.heat?"Heatmap: alle gemachten Touren":"Heatmap aus");}
      else if(m==="tempo")openPanel(tempoPanel);else if(m==="check")openPanel(()=>checklistPanel());else if(m==="admin")showAdmin();else if(m==="drive")openPanel(drivePanel);
      else if(m==="data")openPanel(dataPanel);else if(m==="settings")openPanel(settingsPanel);else if(m==="info")openPanel(infoPanel);});}};}
@@ -390,8 +405,8 @@ function settingsPanel(){const h=S.settings.home;return {title:"Einstellungen",h
    <div class="btns" style="margin-top:8px"><button class="btn" id="sHomeMap">Kartenmitte als Zuhause</button>${S.me?`<button class="btn" id="sHomeMe">Standort als Zuhause</button>`:""}</div></div>
   <div class="card"><h3>Speicher</h3><div id="sStor" class="muted">wird berechnet …</div><div class="btns" style="margin-top:8px"><button class="btn" id="sPersist">Dauerhaft speichern anfragen</button></div></div>
   <div class="card"><h3>App-Version</h3><p>BoschorMap v${APP_VERSION}</p><button class="btn" id="sUpd"><svg><use href="#i-sync"/></svg>Nach Update suchen</button></div>`,
-  async after(P){$("#sHomeMap",P).onclick=async()=>{const c=map.getCenter();S.settings.home={lat:c.lat,lon:c.lon,name:"Kartenmitte"};await saveSettings();refreshPanel();};
-    const hm=$("#sHomeMe",P);if(hm)hm.onclick=async()=>{S.settings.home={lat:S.me.lat,lon:S.me.lon,name:"Standort"};await saveSettings();refreshPanel();};
+  async after(P){$("#sHomeMap",P).onclick=async()=>{const c=map.getCenter();S.settings.home={lat:c.lat,lon:c.lon,name:"Kartenmitte"};await saveSettings();drawHome();refreshPanel();};
+    const hm=$("#sHomeMe",P);if(hm)hm.onclick=async()=>{S.settings.home={lat:S.me.lat,lon:S.me.lon,name:"Standort"};await saveSettings();drawHome();refreshPanel();};
     $("#sPersist",P).onclick=async()=>{const ok=navigator.storage&&navigator.storage.persist?await navigator.storage.persist():false;toast(ok?"Speicher wird dauerhaft behalten":"Der Browser hat abgelehnt – bei installierter App meist automatisch");refreshPanel();};
     $("#sUpd",P).onclick=checkUpdate;
     try{const e=await navigator.storage.estimate();const per=navigator.storage.persisted?await navigator.storage.persisted():false;
@@ -490,12 +505,12 @@ function drawHeat(c,m){if(!S.heat)return;const b=m.getBounds();const z=m.zoom;c.
 function gipfelbuchPanel(){const g=S.points.filter(p=>!p.del&&p.cat==="gipfel"&&(p.visits||[]).length);
   const rows=g.map(p=>{const all=p.visits||[],v=all.map(x=>x.d).filter(Boolean).sort();return {p,first:all.some(x=>!x.d)?"":v[0]||"",last:v[v.length-1]||"",n:all.length};}).sort((a,b)=>b.last.localeCompare(a.last));
   const years={};for(const r of rows)for(const v of r.p.visits||[]){const y=String(v.d||"").slice(0,4);if(!y)continue;(years[y]=years[y]||new Set()).add(r.p.id);}
-  const hm={};for(const t of S.tours)if(!t.del&&t.status==="gemacht"&&t.date){const y=t.date.slice(0,4);hm[y]=(hm[y]||0)+(t.up||0);}
+  const hm={},tn={};for(const t of S.tours)if(!t.del&&t.status==="gemacht"&&t.date){const y=t.date.slice(0,4);hm[y]=(hm[y]||0)+(t.up||0);tn[y]=(tn[y]||0)+1;}
   const ys=[...new Set([...Object.keys(years),...Object.keys(hm)])].sort().reverse();const top=g.slice().sort((a,b)=>(b.hoehe||0)-(a.hoehe||0))[0];
   const offen=S.points.filter(p=>!p.del&&p.cat==="gipfel"&&!(p.visits||[]).length).length;
   return {title:"Gipfelbuch",icon:`<svg><use href="#i-book"/></svg>`,html:`
    <div class="kv kv4"><div><b>${g.length}</b><small>Gipfel</small></div><div><b>${rows.reduce((a,r)=>a+r.n,0)}</b><small>Besteigungen</small></div><div><b>${top&&top.hoehe?fmtN(top.hoehe):"–"}</b><small>höchster (m)</small></div><div><b>${offen}</b><small>noch offen</small></div></div>
-   ${ys.length?`<div class="card" style="margin-top:10px"><h3>Pro Jahr</h3><table class="tbl"><tr><th>Jahr</th><th>Gipfel</th><th>Höhenmeter</th></tr>${ys.map(y=>`<tr><td><b>${y}</b></td><td>${years[y]?years[y].size:0}</td><td>${fmtN(Math.round(hm[y]||0))}</td></tr>`).join("")}</table></div>`:""}
+   ${ys.length?`<div class="card" style="margin-top:10px"><h3>Pro Jahr</h3><table class="tbl"><tr><th>Jahr</th><th>Gipfel</th><th>Touren</th><th>Höhenmeter<br><small class="muted">alle Touren</small></th></tr>${ys.map(y=>`<tr><td><b>${y}</b></td><td>${years[y]?years[y].size:0}</td><td>${tn[y]||0}</td><td>${fmtN(Math.round(hm[y]||0))}</td></tr>`).join("")}</table><p class="muted small" style="margin:6px 0 0">Höhenmeter = Aufstieg aller gemachten Touren mit GPS-Track im Jahr (auch ohne Gipfel).</p></div>`:""}
    <div class="card"><h3>Bestiegene Gipfel</h3>${rows.length?rows.map(r=>`<button class="q gb" data-gb="${r.p.id}"><span class="grow"><b>${esc(r.p.name||"Gipfel")}</b>${r.p.hoehe?` <small class="muted">${fmtN(r.p.hoehe)} m</small>`:""}<br>
       <small class="muted">${r.n>1?`${r.n}× · zuerst ${fmtVisit(r.first)} · zuletzt ${fmtVisit(r.last)}`:r.last?fmtDate(r.last):"früher, Datum unbekannt"}</small></span><svg class="chev"><use href="#i-back"/></svg></button>`).join("")
       :`<div class="muted">Noch keine Gipfel als besucht markiert. Beim GPX-Import schlägt die App Gipfel am Track vor; oder bei einem Gipfel «Besuch hinzufügen».</div>`}</div>`,
