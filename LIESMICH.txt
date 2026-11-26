@@ -1,4 +1,4 @@
-BoschorMap – v4.0 (privates Projekt)
+BoschorMap – v4.1 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,9 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v4.1
+- Gipfelbuch «Pro Jahr»: pro Jahr aufgeteilt nach Sportart (Touren, Distanz und Höhenmeter je Wanderung, Skitour, Gravel …); neue Spalte «Distanz».
 
 NEU IN v4.0
 - Gipfelbuch «Pro Jahr»: neue Spalte «Touren», Höhenmeter klar als «alle Touren» beschriftet (Aufstieg aus den GPS-Tracks, auch ohne Gipfel).
