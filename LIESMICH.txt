@@ -1,4 +1,4 @@
-BoschorMap – v4.2 (privates Projekt)
+BoschorMap – v5.0 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,9 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v5.0
+- Offline-Regionen: «Übersichtskarte ganze Schweiz» – Landeskarte der ganzen Schweiz bis Zoom 14 (ca. 0.6 GB) oder 15 (ca. 2 GB) als Grundkarte; Detailgebiete weiterhin als Regionen.
 
 NEU IN v4.2
 - «Aktualisieren» speichert zusätzlich die Messwerte («Jetzt gemessen») der nächsten Stationen aller Orte, Touren und Zuhause – offline ist der Stand vom letzten Aktualisieren da. Der Tagesverlauf (4 Tage, stündlich) wird wie bisher für alle gespeichert; Übersicht zeigt jetzt alle Stände.

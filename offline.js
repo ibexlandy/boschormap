@@ -25,19 +25,31 @@ const regionKm2=r=>r.poly&&r.poly.length>2?polyKm2(r.poly):areaKm2(r.bbox);
 const areaKm2=b=>distM(b[0],b[1],b[0],b[3])/1000*distM(b[0],b[1],b[2],b[1])/1000;
 
 /* ---------- Liste der Regionen und Download-Warteschlange ---------- */
+/* Übersichtskarte der ganzen Schweiz (grober Umriss mit Rand), ohne die Grössengrenze normaler Regionen */
+const CH_POLY=[[46.13,5.93],[46.45,6.03],[46.80,6.38],[47.08,6.88],[47.37,6.98],[47.52,7.48],[47.62,7.53],[47.62,8.20],[47.72,8.48],[47.84,8.65],[47.74,9.05],[47.62,9.62],[47.52,9.72],[47.20,9.57],[47.06,9.62],[46.97,10.17],[46.87,10.52],[46.53,10.52],[46.43,10.22],[46.23,10.17],[46.33,9.95],[46.43,9.45],[46.28,9.30],[45.80,9.00],[46.03,8.78],[46.08,8.45],[45.96,8.00],[45.90,7.68],[45.88,7.03],[46.03,6.83],[46.18,6.78],[46.38,6.73],[46.18,6.08]];
+function chRegion(zmax){return {special:"ch",name:"Übersicht Schweiz",bbox:polyBBox(CH_POLY),poly:CH_POLY,bases:["lk"],ovs:[],zmax};}
+function chPanel(){const c14=regionCount(chRegion(14)),c15=regionCount(chRegion(15));
+  return {title:"Übersichtskarte Schweiz",icon:`<svg><use href="#i-layers"/></svg>`,half:true,html:`<p class="muted" style="margin:0 0 10px">Landeskarte der ganzen Schweiz als Grundkarte, damit offline nirgends ein leeres Gebiet ist. Für Touren lädst du die Gebiete wie bisher als Regionen in voller Detailstufe. Am besten im WLAN, App dabei offen lassen.</p>
+    <div class="btns" style="flex-direction:column;align-items:stretch">
+     <button class="btn pri" data-chz="14">bis Zoom 14 (etwa 1:100'000) · ca. ${fmtN(Math.round(c14.mb))} MB · ${durTxt(c14.n)}</button>
+     <button class="btn" data-chz="15">bis Zoom 15 (etwa 1:50'000) · ca. ${fmtN(Math.round(c15.mb))} MB · ${durTxt(c15.n)}</button></div>`,
+    after(P){$$("[data-chz]",P).forEach(b=>b.onclick=async()=>{if(!navigator.onLine)return toast("Kein Internet");const c=regionCount(chRegion(+b.dataset.chz));
+      if(stFree!=null&&c.mb>stFree*0.9)return toast(`Zu wenig Speicher frei (ca. ${fmtN(Math.round(stFree))} MB)`,5000);
+      const r=Object.assign(chRegion(+b.dataset.chz),{id:uid(),state:"wait",done:0,bytes:0,created:Date.now(),noNames:true});r.total=c.n;await put("regions",r,await tdb());toast("Download gestartet");pumpQueue();replacePanel(regionsPanel);});}};}
 async function regionsPanel(){const R=(await getAll("regions",await tdb())).sort((a,b)=>(a.created||0)-(b.created||0));
   const st={done:["erledigt","st-done"],run:["läuft","st-run"],wait:["kommt noch","st-wait"],paused:["angehalten","st-wait"],err:["unterbrochen","st-err"],names:["läuft (Namen)","st-run"]};
   let est="";try{const e=await navigator.storage.estimate();est=`Belegt insgesamt: ${MB(e.usage||0)} von ca. ${MB(e.quota||0)}`;}catch(e){}
   return {title:"Offline-Regionen",icon:`<svg><use href="#i-down"/></svg>`,html:`
    <p class="muted">Gespeicherte swisstopo-Karten (und gewählte Ebenen) sind auch ohne Netz da. Grenzen pro Region: ${fmtN(LIM_KM2)} km² und ${fmtN(LIM_TILES)} Kacheln.</p>
    <button class="btn pri full" id="rNew"><svg><use href="#i-plus"/></svg>Neue Region auf der Karte wählen</button>
+   ${R.some(r=>r.special==="ch")?"":`<button class="btn full" id="rCH" style="margin-top:8px"><svg><use href="#i-layers"/></svg>Übersichtskarte ganze Schweiz</button>`}
    <div class="card" style="margin-top:10px">${R.length?R.map(r=>{const s=st[r.state]||st.wait;const pct=r.total?Math.round((r.done||0)/r.total*100):0;
      return `<div class="q"><div class="grow"><b>${esc(r.name)}</b> <small class="${s[1]}">${s[0]}</small><br><small class="muted">${(r.bases||[]).map(k=>BASES[k].n).concat((r.ovs||[]).filter(k=>OVERLAYS[k]).map(k=>OVERLAYS[k].n)).join(", ")} · bis Zoom ${r.zmax} · ${fmtN(r.done||0)} / ${fmtN(r.total||0)} Kacheln · ${MB(r.bytes||0)}${r.names?` · ${fmtN(r.names)} Namen`:""}${r.fail?` · ${r.fail} fehlten`:""}</small>
        ${r.state!=="done"?`<div class="pbar"><i style="width:${pct}%"></i></div>`:""}</div>
       <div class="btns" style="flex-direction:column;gap:4px">${r.state==="run"||r.state==="names"?`<button class="btn sm" data-pause="${r.id}">Anhalten</button>`:r.state!=="done"?`<button class="btn sm pri" data-go="${r.id}">Fortsetzen</button>`:""}
        <button class="btn sm" data-show="${r.id}">Zeigen</button><button class="btn sm red" data-del="${r.id}">Löschen</button></div></div>`;}).join(""):`<div class="muted">Noch keine Regionen gespeichert.</div>`}</div>
    <p class="muted small">${est}</p>`,
-   after(P){$("#rNew",P).onclick=startRegionSelect;
+   after(P){$("#rNew",P).onclick=startRegionSelect;if($("#rCH",P))$("#rCH",P).onclick=()=>openPanel(chPanel,{half:true});
      $$("[data-go]",P).forEach(b=>b.onclick=()=>resumeRegion(b.dataset.go));$$("[data-pause]",P).forEach(b=>b.onclick=()=>{if(dl)dl.stop=true;});
      $$("[data-show]",P).forEach(b=>b.onclick=async()=>{const r=R.find(x=>x.id===b.dataset.show);closePanel();map.fitBounds(r.bbox,30);if(r.poly){S._rpoly=r.poly;map.addDrawer(drawRegionPoly);setTimeout(()=>{S._rpoly=null;map.removeDrawer(drawRegionPoly);},4000);}else{showFrame(r.bbox);setTimeout(hideFrame,4000);}});
      $$("[data-del]",P).forEach(b=>b.onclick=async()=>{const r=R.find(x=>x.id===b.dataset.del);if(!confirm(`Region «${r.name}» auf diesem Gerät löschen?`))return;if(dl&&dl.id===r.id)dl.stop=true;await deleteRegion(r);refreshPanel();});}};}
@@ -103,7 +115,7 @@ function regionFormPanel(){if(!regionSel)return {title:"Region",html:""};const r
 async function resumeRegion(id){const T=await tdb();const r=await getOne("regions",id,T);if(!r)return;if(!navigator.onLine)return toast("Kein Internet");r.state="wait";await put("regions",r,T);pumpQueue();refreshPanel();}
 async function pumpQueue(){if(dl)return;const T=await tdb();const R=(await getAll("regions",T)).filter(r=>r.state==="wait").sort((a,b)=>a.created-b.created);if(!R.length){updPill();return;}
   const r=R[0];dl={id:r.id,stop:false};r.state="run";await put("regions",r,T);updPill(r);refreshRegionsPanel();
-  try{await downloadRegion(r,T);if(!dl.stop){r.state="names";await put("regions",r,T);refreshRegionsPanel();await downloadNames(r,T);if(!dl.stop&&((r.bases||[]).includes("winter")||(r.ovs||[]).includes("ski")))await skiPrefetch(r.bbox);}
+  try{await downloadRegion(r,T);if(!dl.stop&&!r.noNames){r.state="names";await put("regions",r,T);refreshRegionsPanel();await downloadNames(r,T);if(!dl.stop&&((r.bases||[]).includes("winter")||(r.ovs||[]).includes("ski")))await skiPrefetch(r.bbox);}
     r.state=dl.stop?"paused":"done";}catch(e){console.warn(e);r.state="err";r.errMsg=e.message;toast("Download unterbrochen: "+e.message,5000);}
   await put("regions",r,T);dl=null;refreshRegionsPanel();updPill();if(r.state==="done")toast(`«${r.name}» ist offline verfügbar`,4000);pumpQueue();}
 function refreshRegionsPanel(){if(nav.length&&nav[nav.length-1].fn===regionsPanel)refreshPanel();}
