@@ -1,4 +1,4 @@
-BoschorMap – v5.0 (privates Projekt)
+BoschorMap – v5.1 (privates Projekt)
 ==========================================
 
 Inhalt des Ordners
@@ -52,6 +52,11 @@ Inhalt des Ordners
   Karten: © swisstopo, BAFU, ASTRA (geo.admin.ch) · Höhen und Namen: © swisstopo
   Lawinenbulletin: WSL-Institut für Schnee- und Lawinenforschung SLF, www.slf.ch (CC BY 4.0)
   Wetter: Quelle: MeteoSchweiz · Wegführung beim Planen: BRouter, Daten © OpenStreetMap-Mitwirkende
+
+NEU IN v5.1
+- Karte verschieben deutlich flüssiger (bei vielen Touren etwa 3× mehr Bilder pro Sekunde): Linien werden beim Ziehen nur verschoben und danach neu gezeichnet; Symbole bewegen sich gemeinsam.
+- Route prüfen: auch Alpen mit Herdenschutzhunden (BAFU) entlang der Route, mit Verhaltenshinweis und ob gerade Alpsaison ist.
+- Unterwegs-Ansicht (Tour → «Unterwegs»): Balken mit zurückgelegten/gesamten km, noch fehlenden Höhenmetern auf und ab, voraussichtlicher Ankunft am Ziel (persönliches Tempo) und Warnung «… m neben der Route» (vibriert einmal). Erledigter Teil wird grau, Bildschirm bleibt an.
 
 NEU IN v5.0
 - Offline-Regionen: «Übersichtskarte ganze Schweiz» – Landeskarte der ganzen Schweiz bis Zoom 14 (ca. 0.6 GB) oder 15 (ca. 2 GB) als Grundkarte; Detailgebiete weiterhin als Regionen.

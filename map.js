@@ -74,23 +74,36 @@ class Map_{
     const z=Math.min(17,Math.max(this.o.minZoom,Math.floor(Math.log2(Math.min(Math.max(60,this.w-2*pad-padR)/(dx*TS),Math.max(60,this.h-2*pad-padB)/(dy*TS)))*4)/4));
     const S=TS*Math.pow(2,z);const cy=(latY(s)+latY(n))/2+padB/2/S,cx=(lonX(w)+lonX(e))/2+padR/2/S;this.flyTo(yLat(cy),xLon(cx),z);}
   zoomAround(nz,px,py){nz=Math.max(this.minZ(),Math.min(this.o.maxZoom,nz));const a=this.unproject(px,py);this.z=nz;
-    const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render();}
-  panBy(dx,dy){const S=this.S;this.cx-=dx/S;this.cy-=dy/S;this.clampView();this.render();}
+    const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render(true);}
+  panBy(dx,dy){const S=this.S;this.cx-=dx/S;this.cy-=dy/S;this.clampView();this.render(true);}
   stop(){if(this.anim){cancelAnimationFrame(this.anim.id);this.anim=null;}}
   animate(dur,step,done){this.stop();const t0=performance.now();const a={};this.anim=a;
     const f=t=>{if(this.anim!==a)return;let k=Math.min(1,(t-t0)/dur);const e=1-Math.pow(1-k,3);step(e);if(k<1)a.id=requestAnimationFrame(f);else{this.anim=null;done&&done();}};a.id=requestAnimationFrame(f);}
   zoomAnim(nz,px,py){nz=Math.max(this.minZ(),Math.min(this.o.maxZoom,nz));const z0=this.z;if(Math.abs(nz-z0)<0.01)return;
     if(px==null){px=this.w/2;py=this.h/2;}const a=this.unproject(px,py);
-    this.animate(220,e=>{this.z=z0+(nz-z0)*e;const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render();},()=>this.moved());}
+    this.animate(220,e=>{this.z=z0+(nz-z0)*e;const S=this.S;this.cx=lonX(a.lon)-(px-this.w/2)/S;this.cy=latY(a.lat)-(py-this.h/2)/S;this.clampView();this.render(true);},()=>this.moved());}
   flyTo(lat,lon,z){const x0=this.cx,y0=this.cy,z0=this.z,x1=lonX(lon),y1=latY(lat),z1=z==null?z0:z;
     const far=Math.hypot(x1-x0,y1-y0)*TS*Math.pow(2,Math.min(z0,z1))>this.w*3;
     if(far){this.setView(lat,lon,z1);return;}
-    this.animate(350,e=>{this.cx=x0+(x1-x0)*e;this.cy=y0+(y1-y0)*e;this.z=z0+(z1-z0)*e;this.clampView();this.render();},()=>this.moved());}
-  render(){if(this.raf)return;this.raf=requestAnimationFrame(()=>{this.raf=0;this.draw();});}
+    this.animate(350,e=>{this.cx=x0+(x1-x0)*e;this.cy=y0+(y1-y0)*e;this.z=z0+(z1-z0)*e;this.clampView();this.render(true);},()=>this.moved());}
+  /* render(true) = nur Kamera bewegt (Verschieben/Zoomen). Dann wird das zuletzt gezeichnete Linienbild nur verschoben/skaliert
+     statt alle Linien neu zu zeichnen; nach kurzer Ruhe (oder spätestens alle 300 ms) folgt ein vollständiges Neuzeichnen. */
+  render(cam){if(!cam)this._full=true;if(this.raf)return;this.raf=requestAnimationFrame(()=>{this.raf=0;this.draw();});}
   draw(){for(const l of this.layers)l.render(this);
-    for(const m of this.markers)this.placeMarker(m);
-    const c=this.cv.getContext("2d");c.setTransform(this.dpr,0,0,this.dpr,0,0);c.clearRect(0,0,this.w,this.h);
+    const c=this.cv.getContext("2d");const lc=this._lc,now=performance.now();
+    if(!this._full&&lc&&lc.w===this.cv.width&&lc.h===this.cv.height&&now-lc.t<700&&Math.abs(this.z-lc.z)<1.5){
+      const S=this.S,k=S/lc.S,dx=(lc.cx-this.cx)*S+this.w/2-this.w/2*k,dy=(lc.cy-this.cy)*S+this.h/2-this.h/2*k;
+      /* reines Verschieben: alle Symbole gemeinsam verschieben statt jedes einzeln */
+      if(k===1)this.mpane.style.transform=`translate(${Math.round(dx)}px,${Math.round(dy)}px)`;else{this.mpane.style.transform="";for(const m of this.markers)this.placeMarker(m);}
+      c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,this.cv.width,this.cv.height);c.drawImage(lc.cv,dx*this.dpr,dy*this.dpr,lc.w*k,lc.h*k);
+      clearTimeout(this._ft);this._ft=setTimeout(()=>this.render(),120);this.fire("move");return;}
+    this._full=false;clearTimeout(this._ft);this.mpane.style.transform="";for(const m of this.markers)this.placeMarker(m);
+    c.setTransform(this.dpr,0,0,this.dpr,0,0);c.clearRect(0,0,this.w,this.h);
     for(const d of this.drawers){try{d(c,this);}catch(e){console.error(e);}}
+    /* Bild für schnelles Verschieben merken */
+    let cc=lc&&lc.w===this.cv.width&&lc.h===this.cv.height?lc.cv:null;if(!cc){cc=document.createElement("canvas");cc.width=this.cv.width;cc.height=this.cv.height;}
+    const g2=cc.getContext("2d");g2.setTransform(1,0,0,1,0,0);g2.clearRect(0,0,cc.width,cc.height);g2.drawImage(this.cv,0,0);
+    this._lc={cv:cc,w:cc.width,h:cc.height,cx:this.cx,cy:this.cy,z:this.z,S:this.S,t:now};
     this.fire("move");}
   moved(){clearTimeout(this._mt);this._mt=setTimeout(()=>this.fire("moveend"),180);}
   addDrawer(f){this.drawers.push(f);this.render();return f;}

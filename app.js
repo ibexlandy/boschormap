@@ -180,7 +180,7 @@ let locFirst=false,meAcc=null;
 function toggleLocate(){if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null;$("#bLoc").classList.remove("on");$("#bCam").hidden=true;if(meMk){map.removeMarker(meMk);meMk=null;}meAcc=null;map.render();return;}
   if(!navigator.geolocation)return toast("Standort nicht verfügbar");$("#bLoc").classList.add("on");$("#bCam").hidden=false;locFirst=true;
   watchId=navigator.geolocation.watchPosition(pos=>{const {latitude:la,longitude:lo,accuracy:ac}=pos.coords;S.me={lat:la,lon:lo};
-    if(!meMk)meMk=map.addMarker({lat:la,lon:lo,cls:"",anchor:[9,9],html:`<div class="me"></div>`,z:40});else map.moveMarker(meMk,la,lo);meAcc={la,lo,ac};map.render();
+    if(!meMk)meMk=map.addMarker({lat:la,lon:lo,cls:"",anchor:[9,9],html:`<div class="me"></div>`,z:40});else map.moveMarker(meMk,la,lo);meAcc={la,lo,ac};map.render();if(uw)uwUpdate(la,lo,ac);
     if(locFirst){locFirst=false;map.flyTo(la,lo,Math.max(map.z,14));}},err=>{toast("Standort: "+(err.code===1?"keine Berechtigung":"nicht gefunden"));toggleLocate();},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});}
 miscDraw.push((c,m)=>{if(!meAcc)return;const p=m.project(meAcc.la,meAcc.lo);const r=meAcc.ac/(40075016*Math.cos(meAcc.la*RAD)/m.S);if(r<6)return;c.beginPath();c.arc(p.x,p.y,r,0,7);c.fillStyle="rgba(30,136,229,.12)";c.fill();c.strokeStyle="rgba(30,136,229,.5)";c.lineWidth=1;c.stroke();});
 

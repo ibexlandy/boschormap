@@ -1,6 +1,6 @@
 /* BoschorMap – Service-Worker (Scope /boschormap/). Eigene Cache-Namen «boschormap-…»;
    es werden ausschliesslich eigene Caches gelöscht, nie die von IbexMap auf derselben Herkunft. */
-const V="5.0",APP="boschormap-app-v"+V,VIEW="boschormap-view",SHARE="boschormap-share",MAXVIEW=4000;
+const V="5.1",APP="boschormap-app-v"+V,VIEW="boschormap-view",SHARE="boschormap-share",MAXVIEW=4000;
 const SHELL=["./","index.html","app.css","core.js","map.js","gpx.js","app.js","tours.js","offline.js","sync.js","admin.js","check.js","wxhour.js","boot.js",
   "manifest.webmanifest","icon-192.png","icon-512.png","icon-maskable-512.png","favicon.png","apple-touch-icon.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(APP).then(c=>Promise.all(SHELL.map(u=>fetch(u,{cache:"no-store"}).then(r=>{if(r.ok)return c.put(new URL(u,self.registration.scope).href,r);}).catch(()=>{})))).then(()=>self.skipWaiting()));});

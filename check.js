@@ -41,11 +41,12 @@ function elevMatch(r,e){if(!e)return true;const lo=parseFloat(e.lowerBound),hi=p
 /* Schutzgebiete entlang der Route */
 async function zonesAlong(line){if(!navigator.onLine)return null;const L=line.length>180?simplify(line,25).slice(0,400):line;const path=L.map(p=>toLV95(p[0],p[1]).map(v=>Math.round(v)));
   const xs=path.map(p=>p[0]),ys=path.map(p=>p[1]);const ext=[Math.min(...xs)-500,Math.min(...ys)-500,Math.max(...xs)+500,Math.max(...ys)+500].join(",");const out=[];
-  for(const [lay,typ] of [["ch.bafu.wrz-wildruhezonen_portal","Wildruhezone"],["ch.bafu.wrz-jagdbanngebiete_select","Jagdbanngebiet"]]){
+  for(const [lay,typ] of [["ch.bafu.wrz-wildruhezonen_portal","Wildruhezone"],["ch.bafu.wrz-jagdbanngebiete_select","Jagdbanngebiet"],["ch.bafu.alpweiden-herdenschutzhunde","Alp mit Herdenschutzhunden"]]){
     const u=`https://api3.geo.admin.ch/rest/services/api/MapServer/identify?geometryType=esriGeometryPolyline&geometry=${encodeURIComponent(JSON.stringify({paths:[path]}))}&layers=all:${lay}&tolerance=0&sr=2056&returnGeometry=true&geometryFormat=geojson&lang=de&imageDisplay=500,500,96&mapExtent=${ext}&limit=20`;
     try{const r=await fetch(u);if(!r.ok)continue;const j=await r.json();for(const f of j.results||[]){const a=f.properties||f.attributes||{};const g=f.geometry;
       const rings=g&&g.type==="Polygon"?[g.coordinates[0]]:g&&g.type==="MultiPolygon"?g.coordinates.map(p=>p[0]):[];
-      out.push({typ,name:a.wrz_name||a.jb_name||a.name||a.label||typ,best:a.best_de||a.bestimmung_de||"",zeit:a.schutzzeit||"",kanton:a.kanton||"",
+      const hsh=/herdenschutz/.test(lay);const nm=a.wrz_name||a.jb_name||a.alpname||a.alp_name||a.alp||a.name||a.bezeichnung||a.label||f.label||typ;
+      out.push({typ,hsh,name:hsh&&nm===typ?"Alp":nm,best:hsh?"Herdenschutzhunde bei der Herde: ruhig bleiben, vom Bike absteigen und schieben, Herde weiträumig umgehen, Hunde nicht füttern oder streicheln.":a.best_de||a.bestimmung_de||"",zeit:hsh?"":a.schutzzeit||"",kanton:a.kanton||"",
         rings:rings.map(rg=>(rg.length>300?rg.filter((_,i)=>i%Math.ceil(rg.length/300)===0):rg).map(c=>fromLV95(c[0],c[1])))});}}catch(e){}}
   return out;}
 function inSeason(zeit){const m=(zeit||"").match(/(\d{1,2})\.(\d{1,2})\.?\s*[-–]\s*(\d{1,2})\.(\d{1,2})\./);if(!m)return null;const d=new Date(),v=(d.getMonth()+1)*100+d.getDate();
@@ -70,9 +71,9 @@ function checkHTML(res){if(!res)return "";const z=res.zones;let h="";
         ${r.crit?`<br><small style="color:#c8102e">⚠ ${esc(r.hits.join(", "))}</small>`:""}</span><button class="btn sm" data-ck="${i}">Zeigen</button></div>`).join("")}
       <div class="btns" style="margin-top:8px"><button class="btn sm" id="ckAll">Alle auf der Karte</button></div>`}
      <p class="muted small" style="margin:8px 0 0">Hangneigung: swisstopo (Ebene «Hangneigung über 30°», ±10 m um die Linie). Exposition aus swissALTI3D. Entscheidungshilfe – ersetzt die eigene Beurteilung von Verhältnissen und Gelände nicht.</p></div>`;}
-  h+=`<div class="card"><h3><svg><use href="#i-warn"/></svg>Schutzgebiete an der Route</h3>${z==null?`<p class="muted" style="margin:4px 0">Prüfung braucht Internet.</p>`:!z.length?`<p style="margin:4px 0">Die Route berührt keine Wildruhezone und kein Jagdbanngebiet.</p>`:
-    z.map((x,i)=>{const s=inSeason(x.zeit);return `<div class="q"><span class="grow"><b>${esc(x.name)}</b> <small class="muted">${x.typ}${x.kanton?" · "+esc(x.kanton):""}</small><br>
-     <small>${esc(x.best||"Bestimmungen beachten")}${x.zeit?` · gilt ${esc(x.zeit)}`:""}${s===true?` · <b style="color:#c8102e">jetzt in Kraft</b>`:s===false?" · zurzeit nicht in Kraft":""}</small></span><button class="btn sm" data-zn="${i}">Zeigen</button></div>`;}).join("")}
+  h+=`<div class="card"><h3><svg><use href="#i-warn"/></svg>Schutzgebiete und Herdenschutz</h3>${z==null?`<p class="muted" style="margin:4px 0">Prüfung braucht Internet.</p>`:!z.length?`<p style="margin:4px 0">Die Route berührt keine Wildruhezone, kein Jagdbanngebiet und keine Alp mit Herdenschutzhunden.</p>`:
+    z.map((x,i)=>{const s=x.hsh?inSeason("01.06. - 30.09."):inSeason(x.zeit);return `<div class="q"><span class="grow"><b>${esc(x.name)}</b> <small class="muted">${x.typ}${x.kanton?" · "+esc(x.kanton):""}</small><br>
+     <small>${esc(x.best||"Bestimmungen beachten")}${x.hsh?` · Alpsaison ca. Juni–September${s?` · <b style="color:#c8102e">jetzt Alpsaison</b>`:" · zurzeit keine Alpsaison"}`:`${x.zeit?` · gilt ${esc(x.zeit)}`:""}${s===true?` · <b style="color:#c8102e">jetzt in Kraft</b>`:s===false?" · zurzeit nicht in Kraft":""}`}</small></span><button class="btn sm" data-zn="${i}">Zeigen</button></div>`;}).join("")}
     <p class="muted small" style="margin:8px 0 0">Quelle: BAFU / Kantone über geo.admin.ch. Massgebend sind die Signalisation vor Ort und die kantonalen Bestimmungen.</p></div>`;
   return h;}
 function bindCheck(P,res){if(!res)return;const show=(runs,zones)=>{S._chk={runs:runs||[],zones:zones||[]};const all=[...(runs||[]).flatMap(r=>r.pts),...(zones||[]).flatMap(z=>z.rings.flat())];if(all.length)map.fitBounds(bboxOf(all),60,sheetPad(),sheetPadR());map.render();};

@@ -132,6 +132,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(t&&!t.del)rem
     ${idea?`<button class="btn pri" id="tRe"><svg><use href="#i-flag"/></svg>Route ändern</button>`:`<button class="btn" id="tAgain"><svg><use href="#i-flag"/></svg>Nochmals machen</button>`}
     <button class="btn" id="tGpx"><svg><use href="#i-down"/></svg>GPX</button>
     <button class="btn" id="tCond"><svg><use href="#i-${winter?"snow":"sun"}"/></svg>${winter?"Bulletin & Wetter":"Wetter"}</button>
+    <button class="btn" id="tUw"><svg><use href="#i-locate"/></svg>Unterwegs</button>
     <button class="btn" id="tChk"><svg><use href="#i-check"/></svg>Checkliste</button>
     ${hasRaw?`<button class="btn" id="tRaw">Original-Track</button>`:""}
     ${t.status==="gemacht"&&t.src==="gpx"?`<button class="btn" id="tMrg"><svg><use href="#i-route"/></svg>Zusammenführen</button>`:""}
@@ -148,7 +149,7 @@ async function tourPanel(id){const t=S.tours.find(x=>x.id===id);if(t&&!t.del)rem
      $("#tGpx",P).onclick=async()=>{const L=await tourLine(t.id);if(!L)return toast("Linie fehlt (noch nicht abgeglichen?)");
        const wp=along.map(x=>({lat:x.p.lat,lon:x.p.lon,ele:x.p.hoehe,name:x.p.name}));download(`${fileSafe(t.name)}.gpx`,toGPX(t.name,L,wp),"application/gpx+xml");};
      $("#tCond",P).onclick=()=>{const top=prof.length?prof.reduce((m,p)=>p.h>m.h?p:m,prof[0]):null;const c=top||{lat:(t.bbox[0]+t.bbox[2])/2,lon:(t.bbox[1]+t.bbox[3])/2,h:t.emax};openPanel(()=>conditionsPanel(c.lat,c.lon,c.h,t.name,{noBul:!!(ARTS[t.art]||{}).bike}));};if($("#tWxTop",P))$("#tWxTop",P).onclick=$("#tCond",P).onclick;
-     $("#tChk",P).onclick=()=>openPanel(()=>checklistPanel(t.art));
+     $("#tChk",P).onclick=()=>openPanel(()=>checklistPanel(t.art));$("#tUw",P).onclick=()=>startUnterwegs(t.id);
      const rw=$("#tRaw",P);if(rw)rw.onclick=async()=>{const r=await getOne("raw",t.id);const g=parseGPX(r.gpx);S._selLine=g.pts.map(p=>[p[0],p[1]]);map.render();
        const st=trackStats(g.pts,g.pts.some(p=>p[3]));toast(`Original: ${fmtKm(st.dist)}, ↑${fmtN(st.up)} m, ${fmtDur(st.moving)} in Bewegung`,5000);};
      const mg=$("#tMrg",P);if(mg)mg.onclick=()=>openPanel(()=>mergePanel(t));
@@ -602,3 +603,39 @@ function mergePanel(t){const cand=S.tours.filter(x=>!x.del&&x.id!==t.id&&x.statu
 /* Schlüssel für den Routen-Check: ändert sich, sobald die Route sich ändert */
 function tourCheckKey(t){return `t:${t.id}:${t.mod||t.created||0}:${t.art}`;}
 function planCheckKey(){const ps=planState;return ps?`p:${ps.art}:`+ps.wps.map(w=>w.lat.toFixed(5)+","+w.lon.toFixed(5)+w.mode).join("|"):"";}
+
+/* ---------- Unterwegs: Fortschritt auf einer Tour (Standort mit der Linie abgleichen) ---------- */
+let uw=null,uwLock=null;
+async function startUnterwegs(id){if(planState||regionSel)return toast("Zuerst Planung bzw. Auswahl beenden");const t=S.tours.find(x=>x.id===id);const line=await tourLine(id);
+  if(!t||!line||line.length<2)return toast("Für diese Tour fehlt die Linie");
+  const L=line.length>5000?simplify(line,2):line;const cd=[0],cu=[0],cn=[0];let eh=L[0][2];
+  for(let i=1;i<L.length;i++){cd.push(cd[i-1]+distM(L[i-1][0],L[i-1][1],L[i][0],L[i][1]));let up=0,dn=0;const h=L[i][2];
+    /* Höhen glätten: erst ab 3 m Änderung zählen (GPS-Rauschen) */
+    if(h!=null){if(eh==null)eh=h;else if(Math.abs(h-eh)>=3){if(h>eh)up=h-eh;else dn=eh-h;eh=h;}}cu.push(cu[i-1]+up);cn.push(cn[i-1]+dn);}
+  uw={t,L,cd,cu,cn,idx:0,frac:0,off:null,warned:false,fix:false};closePanel();if(S._uwDraw)map.removeDrawer(S._uwDraw);S._uwDraw=map.addDrawer(drawUw);
+  map.fitBounds(t.bbox,40,sheetPad(),sheetPadR());if(watchId==null)toggleLocate();else if(S.me)uwUpdate(S.me.lat,S.me.lon,meAcc?meAcc.ac:30);
+  try{if(navigator.wakeLock)uwLock=await navigator.wakeLock.request("screen");}catch(e){}uwBar();}
+function stopUnterwegs(){uw=null;if(S._uwDraw){map.removeDrawer(S._uwDraw);S._uwDraw=null;}modebar(null);try{uwLock&&uwLock.release();}catch(e){}uwLock=null;map.render();}
+document.addEventListener("visibilitychange",async()=>{if(uw&&document.visibilityState==="visible"&&navigator.wakeLock&&!uwLock)try{uwLock=await navigator.wakeLock.request("screen");}catch(e){}});
+/* nächsten Punkt auf der Linie finden – zuerst in der Nähe der letzten Stelle (Rundtouren!), sonst überall */
+function uwNearest(lat,lon){const L=uw.L,k=Math.cos(lat*RAD)*111320,ky=110540;let best={d:Infinity,i:0,f:0};
+  const seg=(a,b)=>{for(let i=Math.max(0,a);i<Math.min(L.length-1,b);i++){const ax=(L[i][1]-lon)*k,ay=(L[i][0]-lat)*ky,bx=(L[i+1][1]-lon)*k,by=(L[i+1][0]-lat)*ky;
+    const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;let f=l2?-(ax*dx+ay*dy)/l2:0;f=f<0?0:f>1?1:f;const ex=ax+f*dx,ey=ay+f*dy,d=Math.hypot(ex,ey);if(d<best.d)best={d,i,f};}};
+  seg(uw.idx-60,uw.idx+600);if(best.d>150||!uw.fix)seg(0,L.length);return best;}
+function uwUpdate(lat,lon,ac){if(!uw)return;const b=uwNearest(lat,lon);const tol=Math.max(60,Math.min(150,(ac||20)*1.5));
+  uw.idx=b.i;uw.frac=b.f;uw.off=b.d;uw.fix=true;const off=b.d>tol;
+  if(off&&!uw.warned&&b.d>100){uw.warned=true;try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}}if(!off)uw.warned=false;uwBar();map.render();}
+function uwBar(){if(!uw)return;const {t,cd,cu,cn,idx:i,frac:f}=uw;const n=cd.length-1;const tot=cd[n];
+  const done=cd[i]+(cd[Math.min(i+1,n)]-cd[i])*f;const rem=Math.max(0,tot-done);const ru=Math.max(0,cu[n]-cu[i]),rd=Math.max(0,cn[n]-cn[i]);
+  const sec=estTime(rem/1000,ru,rd,tempoFor(t.art));const eta=new Date(Date.now()+sec*1000);const pct=tot?Math.round(done/tot*100):0;
+  const st=!uw.fix?`<span class="uws">Warte auf GPS …</span>`:uw.off>Math.max(60,Math.min(150,(meAcc?meAcc.ac:20)*1.5))?`<span class="uws off">${fmtN(Math.round(uw.off))} m neben der Route</span>`:`<span class="uws ok">Auf der Route</span>`;
+  modebar(`<div class="uw"><div class="uwt"><b>${esc(t.name)}</b>${st}<button class="btn sm" id="uwX">Beenden</button></div>
+    <div class="uwp"><i style="width:${pct}%"></i></div>
+    <div class="uwr">${uw.fix?`<span><b>${fmtN(done/1000,1)}</b> / ${fmtN(tot/1000,1)} km</span><span>noch ↑ <b>${fmtN(Math.round(ru))}</b> ↓ ${fmtN(Math.round(rd))} m</span><span>Ziel ca. <b>${String(eta.getHours()).padStart(2,"0")}:${String(eta.getMinutes()).padStart(2,"0")}</b> (${fmtDur(sec)})</span>`:`<span>${fmtN(tot/1000,1)} km · ↑ ${fmtN(Math.round(cu[n]))} m</span>`}</div></div>`);
+  $("#uwX").onclick=stopUnterwegs;}
+function drawUw(c,m){if(!uw)return;const L=uw.L;const col=(ARTS[uw.t.art]||ARTS.wandern).c;
+  /* ganze Route (auch wenn sonst ausgeblendet), darüber der erledigte Teil grau */
+  c.beginPath();L.forEach((q,i)=>{const p=m.project(q[0],q[1]);i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y);});c.strokeStyle="#fff";c.lineWidth=7;c.lineCap="round";c.lineJoin="round";c.stroke();c.strokeStyle=col;c.lineWidth=4;c.stroke();
+  if(!uw.fix)return;c.beginPath();for(let i=0;i<=uw.idx&&i<L.length;i++){const p=m.project(L[i][0],L[i][1]);i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y);}
+  const a=L[uw.idx],b=L[Math.min(uw.idx+1,L.length-1)];const q=m.project(a[0]+(b[0]-a[0])*uw.frac,a[1]+(b[1]-a[1])*uw.frac);c.lineTo(q.x,q.y);
+  c.strokeStyle="rgba(120,130,140,.85)";c.lineWidth=6;c.lineCap="round";c.lineJoin="round";c.stroke();}
